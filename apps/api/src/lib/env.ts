@@ -24,5 +24,12 @@ export function loadEnv() {
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'dev-refresh-secret-change-me',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
     appUrl: process.env.APP_URL ?? 'http://localhost:5173',
+    // Gmail SMTP: nodemailer's `service: 'gmail'` supplies host/port, so we only need
+    // the account + an App Password (regular Gmail passwords don't work over SMTP).
+    smtpUser: process.env.SMTP_USER ?? '',
+    smtpPass: process.env.SMTP_PASS ?? '',
+    smtpFrom: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@calora.local',
   }
 }
+
+export type Env = ReturnType<typeof loadEnv>

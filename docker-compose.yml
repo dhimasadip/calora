@@ -55,6 +55,9 @@ services:
       APP_URL: ${APP_URL:-http://localhost}
       NODE_ENV: production
       PORT: "3001"
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     expose:
       - "3001"
     depends_on:

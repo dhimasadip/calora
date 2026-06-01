@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,13 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export default function Register() {
   const { register } = useAuth()
-  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -28,12 +28,37 @@ export default function Register() {
     setLoading(true)
     try {
       await register(email, password, displayName)
-      navigate('/onboarding')
+      setSubmitted(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-2xl">📬</div>
+            <CardTitle className="text-2xl">Check your inbox</CardTitle>
+            <CardDescription>
+              We sent a verification link to <span className="font-medium text-foreground">{email}</span>.
+              Click it to activate your account, then sign in.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              Didn't get it? Check your spam folder, or you can resend the link from the sign-in page.
+            </p>
+            <Button asChild className="w-full">
+              <Link to="/login">Go to sign in</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (

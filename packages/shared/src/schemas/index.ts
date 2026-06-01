@@ -15,6 +15,14 @@ export const LoginSchema = z.object({
   password: z.string().min(1),
 })
 
+export const VerifyEmailSchema = z.object({
+  token: z.string().min(1),
+})
+
+export const ResendVerificationSchema = z.object({
+  email: z.string().email(),
+})
+
 export const CreateUserProfileSchema = z.object({
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   sex: z.enum(['male', 'female']),
@@ -64,6 +72,8 @@ export const AgentMessageSchema = z.object({
 
 export type RegisterInput = z.infer<typeof RegisterSchema>
 export type LoginInput = z.infer<typeof LoginSchema>
+export type VerifyEmailInput = z.infer<typeof VerifyEmailSchema>
+export type ResendVerificationInput = z.infer<typeof ResendVerificationSchema>
 export type CreateUserProfileInput = z.infer<typeof CreateUserProfileSchema>
 export type UpdateUserProfileInput = z.infer<typeof UpdateUserProfileSchema>
 export type CreateFoodLogInput = z.infer<typeof CreateFoodLogSchema>

@@ -13,6 +13,7 @@ interface AuthContextValue {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName: string) => Promise<void>
+  resendVerification: (email: string) => Promise<void>
   logout: () => Promise<void>
   refresh: () => Promise<void>
 }
@@ -40,12 +41,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user)
   }, [])
 
+  // Registration no longer authenticates — the account stays unverified until the user
+  // clicks the email link, so we don't set the user here.
   const register = useCallback(async (email: string, password: string, displayName: string) => {
-    const data = await api<{ user: AuthUser }>('/auth/register', {
+    await api('/auth/register', {
       method: 'POST',
       body: { email, password, displayName },
     })
-    setUser(data.user)
+  }, [])
+
+  const resendVerification = useCallback(async (email: string) => {
+    await api('/auth/resend-verification', {
+      method: 'POST',
+      body: { email },
+    })
   }, [])
 
   const logout = useCallback(async () => {
@@ -61,8 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, login, register, logout, refresh }),
-    [user, loading, login, register, logout, refresh],
+    () => ({ user, loading, login, register, resendVerification, logout, refresh }),
+    [user, loading, login, register, resendVerification, logout, refresh],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

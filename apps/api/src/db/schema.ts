@@ -21,6 +21,7 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   displayName: text('display_name').notNull(),
+  emailVerified: boolean('email_verified').notNull().default(false),
   onboardingComplete: boolean('onboarding_complete').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
@@ -128,5 +129,22 @@ export const refreshTokens = pgTable(
   (table) => ({
     userIdx: index('refresh_tokens_user_id_idx').on(table.userId),
     expiresAtIdx: index('refresh_tokens_expires_at_idx').on(table.expiresAt),
+  }),
+)
+
+export const emailVerificationTokens = pgTable(
+  'email_verification_tokens',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('email_verification_tokens_user_id_idx').on(table.userId),
+    expiresAtIdx: index('email_verification_tokens_expires_at_idx').on(table.expiresAt),
   }),
 )
