@@ -1,12 +1,16 @@
 name: Deploy to EC2
 
+# Hanya berjalan saat PR di-merge ke main (bukan direct push)
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches: [main]
 
 jobs:
   ci:
     name: Typecheck & Lint
+    # Lewati jika PR ditutup tanpa di-merge
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
@@ -35,8 +39,6 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     environment: production
-    # Hanya deploy jika push langsung ke main (bukan dari PR)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Deploy via SSH
