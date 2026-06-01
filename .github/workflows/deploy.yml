@@ -60,11 +60,17 @@ jobs:
             docker compose up -d
 
             echo "==> Waiting for services to become healthy..."
-            sleep 20
+            for i in $(seq 1 12); do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' calora-web-1 2>/dev/null || echo "not found")
+              echo "  web status: $STATUS (attempt $i/12)"
+              [ "$STATUS" = "healthy" ] && break
+              sleep 10
+            done
 
             echo "==> Health check..."
             docker compose ps
-            curl -sf http://localhost/healthz || (echo "Health check failed!" && exit 1)
+            WEB_PORT=$(grep WEB_PORT .env 2>/dev/null | cut -d= -f2 || echo "80")
+            curl -sf http://localhost:${WEB_PORT}/ || (echo "Health check failed!" && exit 1)
 
             echo "==> Cleaning up unused Docker resources..."
             docker system prune -f
