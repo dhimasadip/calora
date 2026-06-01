@@ -1,4 +1,4 @@
-import type { ActivityLevel, Goal, GoalIntensity, Sex } from '../calculations'
+import type { ActivityLevel, Goal, GoalIntensity, Sex } from '../calculations.js'
 
 export type { ActivityLevel, Goal, GoalIntensity, Sex }
 
