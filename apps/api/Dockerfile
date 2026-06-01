@@ -20,6 +20,7 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
+RUN pnpm --filter shared build
 RUN pnpm --filter api build
 
 # ─── Production deps only ─────────────────────────────────────────────────────
