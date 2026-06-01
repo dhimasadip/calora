@@ -1,0 +1,73 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Typecheck & Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+  deploy:
+    name: Deploy
+    needs: ci
+    runs-on: ubuntu-latest
+    # Hanya deploy jika push langsung ke main (bukan dari PR)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          # Timeout per command (detik)
+          command_timeout: 15m
+          script: |
+            set -e
+
+            cd ~/calora
+
+            echo "==> Pulling latest code..."
+            git pull origin main
+
+            echo "==> Building Docker images..."
+            docker compose build
+
+            echo "==> Restarting services..."
+            docker compose up -d
+
+            echo "==> Waiting for services to become healthy..."
+            sleep 20
+
+            echo "==> Health check..."
+            docker compose ps
+            curl -sf http://localhost/healthz || (echo "Health check failed!" && exit 1)
+
+            echo "==> Cleaning up unused Docker resources..."
+            docker system prune -f
+
+            echo "==> Deploy complete!"
