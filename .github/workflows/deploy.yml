@@ -56,6 +56,12 @@ jobs:
             echo "==> Building Docker images..."
             docker compose build
 
+            echo "==> Running database migrations..."
+            # Remove old migrate container so it always re-runs on every deploy
+            docker compose rm -f migrate 2>/dev/null || true
+            docker compose run --rm migrate
+            echo "==> Migrations complete."
+
             echo "==> Restarting services..."
             docker compose up -d
 
