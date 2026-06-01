@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { toDateStr, shiftDateStr, isDateStr, jakartaInstant } from '@calora/shared'
 
 // Re-exported so the rest of the API keeps importing day helpers from one place.
@@ -10,6 +10,12 @@ export function generateId(): string {
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
+}
+
+// High-entropy URL-safe token for refresh / email-verification flows. Stored only as a
+// SHA-256 hash (see hashToken); the raw value is handed to the client once.
+export function generateToken(): string {
+  return randomBytes(48).toString('base64url')
 }
 
 // Resolve a log entry's logical `date` and a representative `loggedAt` timestamp.
