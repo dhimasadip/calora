@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@latest --activate
+FROM node:22-alpine AS base
+RUN corepack enable && corepack prepare pnpm@11.2.2 --activate
 WORKDIR /app
 
 # ─── Dependencies ─────────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --prod --frozen-lockfile
 
 # ─── Runtime ──────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 RUN apk add --no-cache wget tini && \
     addgroup -g 1001 -S nodejs && \
