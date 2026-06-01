@@ -1,4 +1,4 @@
-import { toDateStr } from './datetime'
+import { toDateStr } from './datetime.js'
 
 export type Sex = 'male' | 'female'
 export type ActivityLevel = 'sedentary' | 'lightly_active' | 'moderately_active' | 'very_active' | 'extremely_active'
