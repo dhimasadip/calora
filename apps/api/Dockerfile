@@ -47,9 +47,18 @@ COPY --from=prod-deps --chown=nodejs:nodejs /app/packages/shared/node_modules ./
 COPY --from=builder --chown=nodejs:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=nodejs:nodejs /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder --chown=nodejs:nodejs /app/packages/shared/package.json ./packages/shared/package.json
+COPY --chown=nodejs:nodejs ./apps/api/drizzle.config.ts ./apps/api/drizzle.config.ts
 
 USER nodejs
 
 EXPOSE 3001
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "apps/api/dist/index.js"]
+
+# ─── Migration helper (for running db migrations) ─────────────────────────────
+FROM builder AS migrate
+WORKDIR /app
+RUN apk add --no-cache tini
+ENV NODE_ENV=production
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["pnpm", "--filter", "api", "db:push"]
