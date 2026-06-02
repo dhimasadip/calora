@@ -2,8 +2,104 @@ import type { FastifyPluginAsync } from 'fastify'
 import Anthropic from '@anthropic-ai/sdk'
 import { db, users, userProfiles, foodLogs, workoutLogs, agentMessages } from '../db/index.js'
 import { eq, and, gte, lt, desc, sql } from 'drizzle-orm'
-import { AgentMessageSchema, formatInJakarta } from '@calora/shared'
+import { AgentMessageSchema, formatInJakarta, CHAT_LIMITS, type ChatUsage } from '@calora/shared'
 import { generateId, toDateStr, shiftDateStr, resolveEntryDate } from '../lib/utils.js'
+import { isProActiveSql, effectivePlan } from '../lib/plan.js'
+
+const PRO_WINDOW_HOURS = CHAT_LIMITS.pro.windowHours
+
+// SQL: is the Pro chat window currently running? (anchored + less than 6h elapsed)
+const proWindowActiveSql = sql<boolean>`(${users.proWindowStartedAt} is not null and ${users.proWindowStartedAt} + make_interval(hours => ${PRO_WINDOW_HOURS}) > now())`
+// SQL: the anchor as a tz-naive Jakarta wall-clock string (or null).
+const proWindowStartedAtStrSql = sql<string | null>`to_char(${users.proWindowStartedAt}, 'YYYY-MM-DD"T"HH24:MI:SS')`
+
+// Count a user's 'user' messages since `startedAt` (a Jakarta wall-clock string bound) and
+// report when the window ends — both in one aggregate query (resetAt is a constant expr).
+async function countSinceWindow(
+  exec: typeof db,
+  userId: string,
+  startedAt: string,
+): Promise<{ used: number; resetAt: string }> {
+  const [row] = await exec
+    .select({
+      used: sql<number>`count(*)::int`,
+      resetAt: sql<string>`to_char(${startedAt}::timestamp + make_interval(hours => ${PRO_WINDOW_HOURS}), 'YYYY-MM-DD"T"HH24:MI:SS')`,
+    })
+    .from(agentMessages)
+    .where(and(
+      eq(agentMessages.userId, userId),
+      eq(agentMessages.role, 'user'),
+      gte(agentMessages.createdAt, sql`${startedAt}::timestamp`),
+    ))
+  return { used: row?.used ?? 0, resetAt: row!.resetAt }
+}
+
+// Free usage: count since midnight Jakarta; resets next midnight (always running).
+async function freeUsage(userId: string): Promise<ChatUsage> {
+  const limit = CHAT_LIMITS.free.limit
+  const todayStr = toDateStr()
+  const [row] = await db
+    .select({ used: sql<number>`count(*)::int` })
+    .from(agentMessages)
+    .where(and(
+      eq(agentMessages.userId, userId),
+      eq(agentMessages.role, 'user'),
+      gte(agentMessages.createdAt, sql`${todayStr}::timestamp`),
+    ))
+  const used = row?.used ?? 0
+  return { plan: 'free', limit, used, remaining: Math.max(0, limit - used), resetAt: `${shiftDateStr(todayStr, 1)}T00:00:00` }
+}
+
+// READ-ONLY usage snapshot (for GET /usage). Never starts a Pro window — so merely viewing
+// your quota doesn't trigger the 6h timer. A not-yet-started window reports resetAt: null.
+async function readChatUsage(userId: string): Promise<ChatUsage> {
+  const [u] = await db
+    .select({ isPro: isProActiveSql, active: proWindowActiveSql, startedAt: proWindowStartedAtStrSql })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  const plan = effectivePlan(u?.isPro ?? false)
+  if (plan !== 'pro') return freeUsage(userId)
+
+  const limit = CHAT_LIMITS.pro.limit
+  if (!u?.active || !u.startedAt) {
+    return { plan: 'pro', limit, used: 0, remaining: limit, resetAt: null }
+  }
+  const { used, resetAt } = await countSinceWindow(db, userId, u.startedAt)
+  return { plan: 'pro', limit, used, remaining: Math.max(0, limit - used), resetAt }
+}
+
+// Enforcement check for an outgoing message. For Pro this (re)anchors the window under a row
+// lock when none is active — so the first chat of a window starts the 6h countdown.
+async function reserveChatSlot(userId: string): Promise<ChatUsage> {
+  const [u] = await db.select({ isPro: isProActiveSql }).from(users).where(eq(users.id, userId)).limit(1)
+  const plan = effectivePlan(u?.isPro ?? false)
+  if (plan !== 'pro') return freeUsage(userId)
+
+  const limit = CHAT_LIMITS.pro.limit
+  return db.transaction(async (tx) => {
+    const [w] = await tx
+      .select({ active: proWindowActiveSql, startedAt: proWindowStartedAtStrSql })
+      .from(users)
+      .where(eq(users.id, userId))
+      .for('update')
+      .limit(1)
+
+    let startedAt = w?.startedAt ?? null
+    if (!w?.active || !startedAt) {
+      // No active window → this chat opens a fresh one anchored at now.
+      const [opened] = await tx
+        .update(users)
+        .set({ proWindowStartedAt: sql`now()` })
+        .where(eq(users.id, userId))
+        .returning({ startedAt: proWindowStartedAtStrSql })
+      startedAt = opened!.startedAt!
+    }
+
+    const { used, resetAt } = await countSinceWindow(tx as unknown as typeof db, userId, startedAt)
+    return { plan: 'pro', limit, used, remaining: Math.max(0, limit - used), resetAt }
+  })
+}
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, baseURL: process.env.ANTHROPIC_BASE_URL })
 
@@ -263,6 +359,25 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
     if (!result.success) return reply.status(400).send({ error: result.error.flatten().fieldErrors })
     const { content, sessionId } = result.data
 
+    // Enforce the per-plan chat limit BEFORE persisting the message or calling the model.
+    // For Pro this also anchors the 6h window on the first chat of a new window.
+    const usage = await reserveChatSlot(request.userId)
+    if (usage.used >= usage.limit) {
+      reply.raw.setHeader('Content-Type', 'text/event-stream')
+      reply.raw.setHeader('Cache-Control', 'no-cache')
+      reply.raw.setHeader('Connection', 'keep-alive')
+      reply.raw.setHeader('X-Accel-Buffering', 'no')
+      reply.raw.flushHeaders()
+      const message =
+        usage.plan === 'pro'
+          ? `You've hit the Pro chat limit (${usage.limit} messages per ${CHAT_LIMITS.pro.windowHours} hours). Please try again a little later.`
+          : `You've reached today's free chat limit (${usage.limit} messages). Upgrade to Pro with a promo code, or come back tomorrow.`
+      // Reuse the existing SSE `error` channel so the chat UI renders it inline.
+      reply.raw.write(`event: error\ndata: ${JSON.stringify({ message, code: 'rate_limited', plan: usage.plan, limit: usage.limit })}\n\n`)
+      reply.raw.end()
+      return
+    }
+
     // Save user message + load history + build prompt concurrently.
     const [, history, systemPrompt] = await Promise.all([
       db.insert(agentMessages).values({
@@ -395,6 +510,13 @@ export const agentRoutes: FastifyPluginAsync = async (fastify) => {
       .orderBy(agentMessages.createdAt)
 
     return reply.send({ messages })
+  })
+
+  // GET /api/v1/agent/usage — current chat-limit usage for the user's effective plan.
+  fastify.get('/usage', {
+    onRequest: [fastify.authenticate],
+  }, async (request, reply) => {
+    return reply.send(await readChatUsage(request.userId))
   })
 
   // GET /api/v1/agent/history — fetch session message history

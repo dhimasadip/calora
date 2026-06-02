@@ -6,6 +6,8 @@ interface AuthUser {
   email: string
   displayName: string
   onboardingComplete: boolean
+  plan: 'free' | 'pro'
+  planExpiresAt: string | null
 }
 
 interface AuthContextValue {

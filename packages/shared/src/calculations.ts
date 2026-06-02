@@ -4,6 +4,7 @@ export type Sex = 'male' | 'female'
 export type ActivityLevel = 'sedentary' | 'lightly_active' | 'moderately_active' | 'very_active' | 'extremely_active'
 export type Goal = 'bulking' | 'cutting' | 'maintaining'
 export type GoalIntensity = 'mild' | 'moderate' | 'aggressive'
+export type Plan = 'free' | 'pro'
 
 const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
   sedentary: 1.2,

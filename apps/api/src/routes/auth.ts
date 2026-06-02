@@ -6,6 +6,7 @@ import { RegisterSchema, LoginSchema, VerifyEmailSchema, ResendVerificationSchem
 import { generateId, generateToken, hashToken } from '../lib/utils.js'
 import { loadEnv } from '../lib/env.js'
 import { sendVerificationEmail } from '../lib/email.js'
+import { isProActiveSql, effectivePlan, planExpiresAtStrSql } from '../lib/plan.js'
 
 const REFRESH_TOKEN_EXPIRY_DAYS = 30
 const ACCESS_TOKEN_EXPIRY = '15m'
@@ -276,13 +277,23 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/me', {
     onRequest: [fastify.authenticate],
   }, async (request, reply) => {
-    const [user] = await db
-      .select({ id: users.id, email: users.email, displayName: users.displayName, onboardingComplete: users.onboardingComplete })
+    const [row] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        displayName: users.displayName,
+        onboardingComplete: users.onboardingComplete,
+        isPro: isProActiveSql,
+        planExpiresAt: planExpiresAtStrSql,
+      })
       .from(users)
       .where(eq(users.id, request.userId))
       .limit(1)
 
-    if (!user) return reply.status(404).send({ error: 'Not found' })
+    if (!row) return reply.status(404).send({ error: 'Not found' })
+    // Report the effective plan: an expired Pro reads back as Free.
+    const { isPro, ...rest } = row
+    const user = { ...rest, plan: effectivePlan(isPro), planExpiresAt: isPro ? row.planExpiresAt : null }
     return reply.send({ user })
   })
 }
