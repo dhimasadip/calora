@@ -12,6 +12,7 @@ import { authRoutes } from './routes/auth.js'
 import { onboardingRoutes } from './routes/onboarding.js'
 import { logsRoutes } from './routes/logs.js'
 import { agentRoutes } from './routes/agent.js'
+import { promoRoutes } from './routes/promo.js'
 import { loadEnv } from './lib/env.js'
 import { client as dbClient } from './db/index.js'
 
@@ -55,6 +56,7 @@ const start = async () => {
   await fastify.register(onboardingRoutes, { prefix: '/api/v1/profile' })
   await fastify.register(logsRoutes, { prefix: '/api/v1/logs' })
   await fastify.register(agentRoutes, { prefix: '/api/v1/agent' })
+  await fastify.register(promoRoutes, { prefix: '/api/v1/promo' })
 
   // Health check
   fastify.get('/health', async () => ({ ok: true, uptime: process.uptime() }))

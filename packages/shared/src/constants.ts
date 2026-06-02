@@ -35,3 +35,15 @@ export const INTENSITY_LABELS: Record<string, string> = {
   moderate: 'Moderate (±0.5 kg/week) — Recommended',
   aggressive: 'Aggressive (±1 kg/week)',
 }
+
+export const PLAN_LABELS: Record<string, string> = {
+  free: 'Free',
+  pro: 'Pro',
+}
+
+// Agent chat limits per plan. Single source of truth shared by the API (enforcement)
+// and the web app (display). Free resets at midnight Jakarta/WIB; Pro is a rolling window.
+export const CHAT_LIMITS = {
+  free: { limit: 6, windowHours: 24 },
+  pro: { limit: 10, windowHours: 6 },
+} as const

@@ -5,6 +5,7 @@ import Register from '@/pages/Register'
 import VerifyEmail from '@/pages/VerifyEmail'
 import Onboarding from '@/pages/Onboarding'
 import Dashboard from '@/pages/Dashboard'
+import Profile from '@/pages/Profile'
 
 function ProtectedRoute({ children, requireOnboarding = true }: { children: React.ReactNode; requireOnboarding?: boolean }) {
   const { user, loading } = useAuth()
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/onboarding" element={<ProtectedRoute requireOnboarding={false}><Onboarding /></ProtectedRoute>} />
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

@@ -70,6 +70,10 @@ export const AgentMessageSchema = z.object({
   sessionId: z.string().min(1),
 })
 
+export const RedeemPromoCodeSchema = z.object({
+  code: z.string().min(1).max(64),
+})
+
 export type RegisterInput = z.infer<typeof RegisterSchema>
 export type LoginInput = z.infer<typeof LoginSchema>
 export type VerifyEmailInput = z.infer<typeof VerifyEmailSchema>
@@ -80,3 +84,4 @@ export type CreateFoodLogInput = z.infer<typeof CreateFoodLogSchema>
 export type UpdateFoodLogInput = z.infer<typeof UpdateFoodLogSchema>
 export type CreateWorkoutLogInput = z.infer<typeof CreateWorkoutLogSchema>
 export type AgentMessageInput = z.infer<typeof AgentMessageSchema>
+export type RedeemPromoCodeInput = z.infer<typeof RedeemPromoCodeSchema>

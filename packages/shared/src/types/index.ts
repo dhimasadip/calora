@@ -1,6 +1,6 @@
-import type { ActivityLevel, Goal, GoalIntensity, Sex } from '../calculations.js'
+import type { ActivityLevel, Goal, GoalIntensity, Plan, Sex } from '../calculations.js'
 
-export type { ActivityLevel, Goal, GoalIntensity, Sex }
+export type { ActivityLevel, Goal, GoalIntensity, Plan, Sex }
 
 export interface User {
   id: string
@@ -8,7 +8,24 @@ export interface User {
   displayName: string
   emailVerified: boolean
   onboardingComplete: boolean
+  plan: Plan
+  planExpiresAt: string | null
   createdAt: string
+}
+
+export interface RedeemPromoResponse {
+  plan: Plan
+  planExpiresAt: string | null
+}
+
+export interface ChatUsage {
+  plan: Plan
+  limit: number
+  used: number
+  remaining: number
+  // When the current limit window resets (tz-naive Jakarta wall-clock string), or null when
+  // no window is running yet (Pro: the 6h timer only starts on the first chat of a window).
+  resetAt: string | null
 }
 
 export interface UserProfile {

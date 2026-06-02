@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PromoCodeForm } from '@/components/PromoCodeForm'
 
 interface FormData {
   dateOfBirth: string
@@ -140,6 +141,11 @@ export default function Onboarding() {
                 <p className="text-2xl font-medium text-primary">{completed.dailyCalorieTarget}</p>
                 <p className="text-xs text-muted-foreground">kcal/day</p>
               </div>
+            </div>
+            <div className="rounded-lg border-[0.5px] border-input bg-muted/40 p-4 space-y-2 text-left">
+              <p className="text-sm font-medium">Have a promo code?</p>
+              <p className="text-xs text-muted-foreground">Redeem it to unlock Pro and get higher chat limits. You can also do this later from your profile.</p>
+              <PromoCodeForm onSuccess={refresh} />
             </div>
             <Button className="w-full" onClick={() => navigate('/')}>Go to Dashboard</Button>
           </CardContent>

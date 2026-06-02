@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { streamAgent, api } from '@/lib/api'
+import { jakartaInstant, type ChatUsage } from '@calora/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ChatMessage } from './ChatMessage'
@@ -9,6 +10,22 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   toolsUsed?: string[]
+}
+
+// `resetAt` is a tz-naive Jakarta wall-clock string ("YYYY-MM-DDTHH:MM:SS"). Anchor it to
+// the +07:00 offset via jakartaInstant so the countdown is correct in any client timezone.
+function resetMs(resetAt: string): number {
+  const [day, time] = resetAt.split('T')
+  return jakartaInstant(day, time).getTime() - Date.now()
+}
+
+function formatResetIn(ms: number): string {
+  if (ms <= 0) return 'now'
+  const totalMin = Math.ceil(ms / 60000)
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  if (h >= 1) return `${h}h ${m}m`
+  return `${m}m`
 }
 
 interface Props {
@@ -26,7 +43,30 @@ export function ChatPanel({ sessionId, onLogChange }: Props) {
   ])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
+  const [usage, setUsage] = useState<ChatUsage | null>(null)
+  const [tick, setTick] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  const loadUsage = useCallback(() => {
+    api<ChatUsage>('/agent/usage')
+      .then(setUsage)
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadUsage()
+  }, [loadUsage])
+
+  // Re-render every 30s so the "resets in" countdown stays current without polling.
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Once the window elapses, pull fresh usage so the quota visibly refills.
+  useEffect(() => {
+    if (usage?.resetAt && resetMs(usage.resetAt) <= 0) loadUsage()
+  }, [usage, tick, loadUsage])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -81,6 +121,7 @@ export function ChatPanel({ sessionId, onLogChange }: Props) {
       })
     } finally {
       setStreaming(false)
+      loadUsage()
     }
   }
 
@@ -110,23 +151,41 @@ export function ChatPanel({ sessionId, onLogChange }: Props) {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="flex gap-2 p-3" style={{ borderTop: '0.5px solid var(--color-border)' }}>
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Tell me what you ate or what workout you did…"
-          disabled={streaming}
-          className="flex-1 h-auto rounded-md text-[11px]"
-          style={{ background: 'var(--color-surface)', padding: '7px 11px' }}
-        />
-        <Button
-          type="submit"
-          disabled={streaming || !input.trim()}
-          className="h-auto rounded-md py-[7px] px-[13px]"
-        >
-          <i className="ti ti-send" style={{ fontSize: 15 }} />
-        </Button>
-      </form>
+      <div style={{ borderTop: '0.5px solid var(--color-border)' }}>
+        {usage && (
+          <div className="flex items-center justify-between px-3 pt-2" style={{ fontSize: 10 }}>
+            <span
+              className="flex items-center gap-1"
+              style={{ color: usage.remaining === 0 ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}
+              title={usage.plan === 'pro' ? `Pro plan · ${usage.limit} messages / 6h` : `Free plan · ${usage.limit} messages / day`}
+            >
+              <i className="ti ti-bolt" style={{ fontSize: 11 }} />
+              {usage.remaining}/{usage.limit} chats left{usage.plan === 'pro' ? '' : ' today'}
+            </span>
+            <span className="flex items-center gap-1" style={{ color: 'var(--color-text-muted)' }}>
+              <i className="ti ti-clock" style={{ fontSize: 11 }} />
+              {usage.resetAt ? `resets in ${formatResetIn(resetMs(usage.resetAt))}` : 'resets 6h after first chat'}
+            </span>
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="flex gap-2 p-3">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Tell me what you ate or what workout you did…"
+            disabled={streaming}
+            className="flex-1 h-auto rounded-md text-[11px]"
+            style={{ background: 'var(--color-surface)', padding: '7px 11px' }}
+          />
+          <Button
+            type="submit"
+            disabled={streaming || !input.trim()}
+            className="h-auto rounded-md py-[7px] px-[13px]"
+          >
+            <i className="ti ti-send" style={{ fontSize: 15 }} />
+          </Button>
+        </form>
+      </div>
     </div>
   )
 }

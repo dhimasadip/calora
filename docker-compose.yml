@@ -8,6 +8,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-calora}
     volumes:
       - postgres_data:/var/lib/postgresql
+    # Bind to loopback only: reachable from the host (for SSH-tunneled clients like DBeaver)
+    # but never exposed to the public internet. Do NOT change to "5432:5432".
+    ports:
+      - "127.0.0.1:5432:5432"
     expose:
       - "5432"
     healthcheck:

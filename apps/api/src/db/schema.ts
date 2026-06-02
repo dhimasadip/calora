@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, boolean, timestamp, date, pgEnum, index } from 'drizzle-orm/pg-core'
+import { pgTable, text, integer, real, boolean, timestamp, date, pgEnum, index, uniqueIndex } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
 export const sexEnum = pgEnum('sex', ['male', 'female'])
@@ -15,6 +15,7 @@ export const mealTypeEnum = pgEnum('meal_type', ['breakfast', 'lunch', 'dinner',
 export const logSourceEnum = pgEnum('log_source', ['agent', 'manual'])
 export const messageRoleEnum = pgEnum('message_role', ['user', 'assistant'])
 export const unitPrefEnum = pgEnum('unit_preference', ['metric', 'imperial'])
+export const planEnum = pgEnum('plan', ['free', 'pro'])
 
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
@@ -23,6 +24,13 @@ export const users = pgTable('users', {
   displayName: text('display_name').notNull(),
   emailVerified: boolean('email_verified').notNull().default(false),
   onboardingComplete: boolean('onboarding_complete').notNull().default(false),
+  plan: planEnum('plan').notNull().default('free'),
+  // Jakarta wall-clock instant the Pro plan expires (null = no active Pro / never expires).
+  // Always set & compared via SQL now() so it stays in the Jakarta-pinned session timezone.
+  planExpiresAt: timestamp('plan_expires_at'),
+  // Anchor of the current Pro chat-limit window. The 6h countdown starts at the first chat
+  // of a window; once it elapses the next chat opens a fresh window. Null = no window started.
+  proWindowStartedAt: timestamp('pro_window_started_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -112,6 +120,8 @@ export const agentMessages = pgTable(
       table.sessionId,
       table.createdAt,
     ),
+    // Supports the per-user chat-limit window count (by user + time, across sessions).
+    userCreatedIdx: index('agent_messages_user_created_idx').on(table.userId, table.createdAt),
   }),
 )
 
@@ -146,5 +156,34 @@ export const emailVerificationTokens = pgTable(
   (table) => ({
     userIdx: index('email_verification_tokens_user_id_idx').on(table.userId),
     expiresAtIdx: index('email_verification_tokens_expires_at_idx').on(table.expiresAt),
+  }),
+)
+
+// Promo codes unlock the Pro plan. Created manually in the DB (no admin UI yet).
+// `code` is the normalized (uppercased) primary key; `stock` is remaining redemptions;
+// `durationDays` is how long Pro lasts when this code is redeemed (extends on re-redeem).
+export const promoCodes = pgTable('promo_codes', {
+  code: text('code').primaryKey(),
+  stock: integer('stock').notNull().default(0),
+  durationDays: integer('duration_days').notNull().default(30),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+// One row per (user, code) redemption — audit trail + prevents a user reusing the same code.
+export const promoRedemptions = pgTable(
+  'promo_redemptions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    code: text('code')
+      .notNull()
+      .references(() => promoCodes.code),
+    redeemedAt: timestamp('redeemed_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    userCodeIdx: uniqueIndex('promo_redemptions_user_code_idx').on(table.userId, table.code),
+    userIdx: index('promo_redemptions_user_id_idx').on(table.userId),
   }),
 )
