@@ -1,0 +1,60 @@
+import OpenAI from 'openai'
+import { createHash } from 'node:crypto'
+import { and, eq, gt } from 'drizzle-orm'
+import { db, aiEstimateCache, aiUsageDaily } from '../db/index.js'
+import { loadEnv } from './env.js'
+import { generateId, toDateStr } from './utils.js'
+
+const env = loadEnv()
+
+// The SDK remains server-only. A blank development key makes startup possible without
+// credentials; actual estimate calls return a clear configuration error below.
+export const openai = new OpenAI({ apiKey: env.openaiApiKey || 'development-key' })
+
+export function normalizedHash(...parts: string[]): string {
+  return createHash('sha256').update(parts.map((part) => part.trim().toLowerCase()).join('\n')).digest('hex')
+}
+
+export async function getCachedEstimate<T>(userId: string, kind: 'food' | 'exercise', inputHash: string): Promise<T | null> {
+  const [cached] = await db.select().from(aiEstimateCache).where(and(
+    eq(aiEstimateCache.userId, userId), eq(aiEstimateCache.kind, kind), eq(aiEstimateCache.inputHash, inputHash), gt(aiEstimateCache.expiresAt, new Date()),
+  )).limit(1)
+  return (cached?.response as T | undefined) ?? null
+}
+
+export async function cacheEstimate(userId: string, kind: 'food' | 'exercise', inputHash: string, response: unknown) {
+  const expiresAt = new Date(Date.now() + env.aiCacheTtlHours * 60 * 60 * 1000)
+  await db.insert(aiEstimateCache).values({ id: generateId(), userId, kind, inputHash, response, expiresAt }).onConflictDoUpdate({
+    target: [aiEstimateCache.userId, aiEstimateCache.kind, aiEstimateCache.inputHash], set: { response, expiresAt, createdAt: new Date() },
+  })
+}
+
+export async function getAiUsage(userId: string) {
+  const today = toDateStr()
+  const [usage] = await db.select().from(aiUsageDaily).where(and(eq(aiUsageDaily.userId, userId), eq(aiUsageDaily.date, today))).limit(1)
+  const used = Math.min(usage?.invocationCount ?? 0, env.aiDailyLimit)
+  return { limit: env.aiDailyLimit, used, remaining: Math.max(0, env.aiDailyLimit - used) }
+}
+
+export async function consumeAiInvocation(userId: string) {
+  const today = toDateStr()
+  const [usage] = await db.select().from(aiUsageDaily).where(and(eq(aiUsageDaily.userId, userId), eq(aiUsageDaily.date, today))).limit(1)
+  if (usage && usage.invocationCount >= env.aiDailyLimit) return { allowed: false, remaining: 0 }
+  const count = (usage?.invocationCount ?? 0) + 1
+  if (usage) {
+    await db.update(aiUsageDaily).set({ invocationCount: count, updatedAt: new Date() }).where(eq(aiUsageDaily.id, usage.id))
+  } else {
+    await db.insert(aiUsageDaily).values({ id: generateId(), userId, date: today, invocationCount: count })
+  }
+  return { allowed: true, remaining: Math.max(0, env.aiDailyLimit - count) }
+}
+
+export function assertOpenAiConfigured() {
+  if (!env.openaiApiKey) {
+    const error = new Error('AI estimates are not configured. Add OPENAI_API_KEY to enable them.')
+    ;(error as Error & { statusCode?: number }).statusCode = 503
+    throw error
+  }
+}
+
+export { env as openAiEnv }

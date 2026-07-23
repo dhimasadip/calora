@@ -1,43 +1,30 @@
-import { pgTable, text, integer, real, boolean, timestamp, date, pgEnum, index, uniqueIndex } from 'drizzle-orm/pg-core'
+import { boolean, date, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
 export const sexEnum = pgEnum('sex', ['male', 'female'])
-export const activityLevelEnum = pgEnum('activity_level', [
-  'sedentary',
-  'lightly_active',
-  'moderately_active',
-  'very_active',
-  'extremely_active',
-])
+export const activityLevelEnum = pgEnum('activity_level', ['sedentary', 'lightly_active', 'moderately_active', 'very_active', 'extremely_active'])
 export const goalEnum = pgEnum('goal', ['bulking', 'cutting', 'maintaining'])
 export const goalIntensityEnum = pgEnum('goal_intensity', ['mild', 'moderate', 'aggressive'])
+export const targetModeEnum = pgEnum('daily_target_mode', ['auto', 'custom'])
 export const mealTypeEnum = pgEnum('meal_type', ['breakfast', 'lunch', 'dinner', 'snack', 'other'])
-export const logSourceEnum = pgEnum('log_source', ['agent', 'manual'])
+export const sourceEnum = pgEnum('entry_source', ['manual', 'ai'])
+export const intensityEnum = pgEnum('workout_intensity', ['low', 'moderate', 'high'])
 export const messageRoleEnum = pgEnum('message_role', ['user', 'assistant'])
-export const unitPrefEnum = pgEnum('unit_preference', ['metric', 'imperial'])
-export const planEnum = pgEnum('plan', ['free', 'pro'])
+export const unitPreferenceEnum = pgEnum('unit_preference', ['metric', 'imperial'])
+export const estimateKindEnum = pgEnum('estimate_kind', ['food', 'exercise'])
 
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   displayName: text('display_name').notNull(),
-  emailVerified: boolean('email_verified').notNull().default(false),
   onboardingComplete: boolean('onboarding_complete').notNull().default(false),
-  plan: planEnum('plan').notNull().default('free'),
-  // Jakarta wall-clock instant the Pro plan expires (null = no active Pro / never expires).
-  // Always set & compared via SQL now() so it stays in the Jakarta-pinned session timezone.
-  planExpiresAt: timestamp('plan_expires_at'),
-  // Anchor of the current Pro chat-limit window. The 6h countdown starts at the first chat
-  // of a window; once it elapses the next chat opens a fresh window. Null = no window started.
-  proWindowStartedAt: timestamp('pro_window_started_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 
 export const userProfiles = pgTable('user_profiles', {
-  userId: text('user_id')
-    .primaryKey()
-    .references(() => users.id, { onDelete: 'cascade' }),
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
   dateOfBirth: text('date_of_birth').notNull(),
   sex: sexEnum('sex').notNull(),
   heightCm: real('height_cm').notNull(),
@@ -46,144 +33,139 @@ export const userProfiles = pgTable('user_profiles', {
   goal: goalEnum('goal').notNull(),
   goalIntensity: goalIntensityEnum('goal_intensity').notNull(),
   targetWeightKg: real('target_weight_kg'),
+  targetDate: date('target_date', { mode: 'string' }),
   bmr: integer('bmr').notNull(),
   tdee: integer('tdee').notNull(),
+  suggestedDailyCalorieTarget: integer('suggested_daily_calorie_target').notNull(),
   dailyCalorieTarget: integer('daily_calorie_target').notNull(),
-  proteinTargetG: integer('protein_target_g').notNull().default(0),
-  carbsTargetG: integer('carbs_target_g').notNull().default(0),
-  fatTargetG: integer('fat_target_g').notNull().default(0),
-  unitPreference: unitPrefEnum('unit_preference').notNull().default('metric'),
+  dailyTargetMode: targetModeEnum('daily_target_mode').notNull().default('auto'),
+  proteinTargetG: integer('protein_target_g').notNull(),
+  carbsTargetG: integer('carbs_target_g').notNull(),
+  fatTargetG: integer('fat_target_g').notNull(),
+  unitPreference: unitPreferenceEnum('unit_preference').notNull().default('metric'),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 
-export const foodLogs = pgTable(
-  'food_logs',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    loggedAt: timestamp('logged_at').notNull().defaultNow(),
-    date: date('date', { mode: 'string' }).notNull().default(sql`CURRENT_DATE`),
-    description: text('description').notNull(),
-    calories: integer('calories').notNull(),
-    proteinG: real('protein_g').notNull().default(0),
-    carbsG: real('carbs_g').notNull().default(0),
-    fatG: real('fat_g').notNull().default(0),
-    mealType: mealTypeEnum('meal_type').notNull().default('other'),
-    source: logSourceEnum('source').notNull().default('manual'),
-    rawInput: text('raw_input'),
-  },
-  (table) => ({
-    userLoggedAtIdx: index('food_logs_user_logged_at_idx').on(table.userId, table.loggedAt),
-    userDateIdx: index('food_logs_user_date_idx').on(table.userId, table.date),
-  }),
-)
-
-export const workoutLogs = pgTable(
-  'workout_logs',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    loggedAt: timestamp('logged_at').notNull().defaultNow(),
-    date: date('date', { mode: 'string' }).notNull().default(sql`CURRENT_DATE`),
-    description: text('description').notNull(),
-    workoutType: text('workout_type').notNull(),
-    durationMinutes: integer('duration_minutes').notNull(),
-    caloriesBurned: integer('calories_burned').notNull(),
-    source: logSourceEnum('source').notNull().default('manual'),
-    rawInput: text('raw_input'),
-  },
-  (table) => ({
-    userLoggedAtIdx: index('workout_logs_user_logged_at_idx').on(table.userId, table.loggedAt),
-    userDateIdx: index('workout_logs_user_date_idx').on(table.userId, table.date),
-  }),
-)
-
-export const agentMessages = pgTable(
-  'agent_messages',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    sessionId: text('session_id').notNull(),
-    role: messageRoleEnum('role').notNull(),
-    content: text('content').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-  },
-  (table) => ({
-    userSessionCreatedIdx: index('agent_messages_user_session_created_idx').on(
-      table.userId,
-      table.sessionId,
-      table.createdAt,
-    ),
-    // Supports the per-user chat-limit window count (by user + time, across sessions).
-    userCreatedIdx: index('agent_messages_user_created_idx').on(table.userId, table.createdAt),
-  }),
-)
-
-export const refreshTokens = pgTable(
-  'refresh_tokens',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    tokenHash: text('token_hash').notNull().unique(),
-    expiresAt: timestamp('expires_at').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-  },
-  (table) => ({
-    userIdx: index('refresh_tokens_user_id_idx').on(table.userId),
-    expiresAtIdx: index('refresh_tokens_expires_at_idx').on(table.expiresAt),
-  }),
-)
-
-export const emailVerificationTokens = pgTable(
-  'email_verification_tokens',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    tokenHash: text('token_hash').notNull().unique(),
-    expiresAt: timestamp('expires_at').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-  },
-  (table) => ({
-    userIdx: index('email_verification_tokens_user_id_idx').on(table.userId),
-    expiresAtIdx: index('email_verification_tokens_expires_at_idx').on(table.expiresAt),
-  }),
-)
-
-// Promo codes unlock the Pro plan. Created manually in the DB (no admin UI yet).
-// `code` is the normalized (uppercased) primary key; `stock` is remaining redemptions;
-// `durationDays` is how long Pro lasts when this code is redeemed (extends on re-redeem).
-export const promoCodes = pgTable('promo_codes', {
-  code: text('code').primaryKey(),
-  stock: integer('stock').notNull().default(0),
-  durationDays: integer('duration_days').notNull().default(30),
+export const foodEntries = pgTable('food_entries', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  date: date('date', { mode: 'string' }).notNull().default(sql`CURRENT_DATE`),
+  loggedAt: timestamp('logged_at').notNull().defaultNow(),
+  name: text('name').notNull(),
+  quantity: real('quantity').notNull(),
+  unit: text('unit').notNull(),
+  calories: integer('calories').notNull(),
+  proteinG: real('protein_g').notNull().default(0),
+  carbsG: real('carbs_g').notNull().default(0),
+  fatG: real('fat_g').notNull().default(0),
+  mealType: mealTypeEnum('meal_type').notNull().default('other'),
+  source: sourceEnum('source').notNull().default('manual'),
+  rawInput: text('raw_input'),
+  version: integer('version').notNull().default(1),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  userDateIdx: index('food_entries_user_date_idx').on(table.userId, table.date),
+  userUpdatedIdx: index('food_entries_user_updated_idx').on(table.userId, table.updatedAt),
+}))
+
+export const exerciseEntries = pgTable('exercise_entries', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  date: date('date', { mode: 'string' }).notNull().default(sql`CURRENT_DATE`),
+  loggedAt: timestamp('logged_at').notNull().defaultNow(),
+  name: text('name').notNull(),
+  workoutType: text('workout_type').notNull(),
+  durationMinutes: integer('duration_minutes').notNull(),
+  intensity: intensityEnum('intensity').notNull().default('moderate'),
+  caloriesBurned: integer('calories_burned').notNull(),
+  notes: text('notes'),
+  source: sourceEnum('source').notNull().default('manual'),
+  rawInput: text('raw_input'),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  userDateIdx: index('exercise_entries_user_date_idx').on(table.userId, table.date),
+  userUpdatedIdx: index('exercise_entries_user_updated_idx').on(table.userId, table.updatedAt),
+}))
+
+export const weightLogs = pgTable('weight_logs', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  date: date('date', { mode: 'string' }).notNull(),
+  weightKg: real('weight_kg').notNull(),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  userDateUnique: uniqueIndex('weight_logs_user_date_unique').on(table.userId, table.date),
+  userDateIdx: index('weight_logs_user_date_idx').on(table.userId, table.date),
+}))
+
+export const agentMessages = pgTable('agent_messages', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull(),
+  role: messageRoleEnum('role').notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  userSessionIdx: index('agent_messages_user_session_idx').on(table.userId, table.sessionId, table.createdAt),
+}))
+
+export const aiEstimateCache = pgTable('ai_estimate_cache', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: estimateKindEnum('kind').notNull(),
+  inputHash: text('input_hash').notNull(),
+  response: jsonb('response').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  cacheKey: uniqueIndex('ai_estimate_cache_user_kind_hash_unique').on(table.userId, table.kind, table.inputHash),
+  expiryIdx: index('ai_estimate_cache_expiry_idx').on(table.expiresAt),
+}))
+
+export const aiUsageDaily = pgTable('ai_usage_daily', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  date: date('date', { mode: 'string' }).notNull(),
+  invocationCount: integer('invocation_count').notNull().default(0),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  usageKey: uniqueIndex('ai_usage_daily_user_date_unique').on(table.userId, table.date),
+}))
+
+export const reminderPreferences = pgTable('reminder_preferences', {
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  mealReminderEnabled: boolean('meal_reminder_enabled').notNull().default(false),
+  mealReminderTime: text('meal_reminder_time').notNull().default('12:00'),
+  weightReminderEnabled: boolean('weight_reminder_enabled').notNull().default(false),
+  weightReminderTime: text('weight_reminder_time').notNull().default('08:00'),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 
-// One row per (user, code) redemption — audit trail + prevents a user reusing the same code.
-export const promoRedemptions = pgTable(
-  'promo_redemptions',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    code: text('code')
-      .notNull()
-      .references(() => promoCodes.code),
-    redeemedAt: timestamp('redeemed_at').notNull().defaultNow(),
-  },
-  (table) => ({
-    userCodeIdx: uniqueIndex('promo_redemptions_user_code_idx').on(table.userId, table.code),
-    userIdx: index('promo_redemptions_user_id_idx').on(table.userId),
-  }),
-)
+export const idempotencyKeys = pgTable('idempotency_keys', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  response: jsonb('response').notNull(),
+  statusCode: integer('status_code').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  userKey: uniqueIndex('idempotency_keys_user_key_unique').on(table.userId, table.key),
+  expiryIdx: index('idempotency_keys_expiry_idx').on(table.expiresAt),
+}))
+
+export const refreshTokens = pgTable('refresh_tokens', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  userIdx: index('refresh_tokens_user_idx').on(table.userId),
+  expiryIdx: index('refresh_tokens_expiry_idx').on(table.expiresAt),
+}))
