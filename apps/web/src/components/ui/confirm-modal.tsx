@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const CONFIRM_EVENT = 'calora:confirm'
 
@@ -35,12 +35,12 @@ export function ConfirmModalViewport() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [request])
+  }, [request, close])
 
-  function close(confirmed: boolean) {
+  const close = useCallback((confirmed: boolean) => {
     request?.resolve(confirmed)
     setRequest(null)
-  }
+  }, [request])
 
   if (!request) return null
 
