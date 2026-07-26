@@ -13,6 +13,7 @@ export function loadEnv() {
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'dev-refresh-secret-change-me',
     openaiApiKey: process.env.OPENAI_API_KEY ?? '',
     openaiModel: process.env.OPENAI_MODEL ?? 'gpt-5.6-terra',
+    openaiBaseUrl: process.env.OPENAI_BASE_URL ?? '',
     aiDailyLimit: Number.parseInt(process.env.AI_DAILY_LIMIT ?? '10', 10),
     aiCacheTtlHours: Number.parseInt(process.env.AI_CACHE_TTL_HOURS ?? '24', 10),
     appUrl: process.env.APP_URL ?? 'http://localhost:5173',

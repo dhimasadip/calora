@@ -9,7 +9,13 @@ const env = loadEnv()
 
 // The SDK remains server-only. A blank development key makes startup possible without
 // credentials; actual estimate calls return a clear configuration error below.
-export const openai = new OpenAI({ apiKey: env.openaiApiKey || 'development-key' })
+// When OPENAI_BASE_URL is set, the client targets any OpenAI-compatible provider
+// (Azure, OpenRouter, a local proxy, etc.); otherwise it falls back to the SDK
+// default (api.openai.com).
+export const openai = new OpenAI({
+  apiKey: env.openaiApiKey || 'development-key',
+  ...(env.openaiBaseUrl ? { baseURL: env.openaiBaseUrl } : {}),
+})
 
 export function normalizedHash(...parts: string[]): string {
   return createHash('sha256').update(parts.map((part) => part.trim().toLowerCase()).join('\n')).digest('hex')

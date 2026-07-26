@@ -39,13 +39,15 @@ async function estimate(userId: string, kind: 'food' | 'exercise', description: 
   const context = kind === 'food'
     ? `Estimate a single food entry from: ${description}. ${mealType ? `Use meal type ${mealType}.` : 'Choose the most likely meal type.'}`
     : `Estimate a single workout from: ${description}. User weight is ${profile?.weightKg ?? 70} kg. Use MET-informed reasoning.`
-  const instruction = `You estimate nutrition and exercise for Calora. Return only the requested structured data. Values are approximate, conservative, non-medical estimates. Do not give health advice. ${context}`
-  const response = await openai.responses.create({
+  const schema = kind === 'food' ? FOOD_SCHEMA : EXERCISE_SCHEMA
+  const instruction = `You estimate nutrition and exercise for Calora. Values are approximate, conservative, non-medical estimates. Do not give health advice. ${context}\n\nRespond with ONLY a single valid JSON object (no markdown, no extra text) matching this JSON schema:\n${JSON.stringify(schema)}`
+  const response = await openai.chat.completions.create({
     model: openAiEnv.openaiModel,
-    input: [{ role: 'user', content: [{ type: 'input_text', text: instruction }] }],
-    text: { format: { type: 'json_schema', name: `${kind}_estimate`, strict: true, schema: kind === 'food' ? FOOD_SCHEMA : EXERCISE_SCHEMA } },
-  } as never) as unknown as { output_text: string }
-  const parsed = kind === 'food' ? FoodEstimateSchema.parse(JSON.parse(response.output_text)) : ExerciseEstimateSchema.parse(JSON.parse(response.output_text))
+    messages: [{ role: 'user', content: instruction }],
+    response_format: { type: 'json_object' },
+  })
+  const content = response.choices[0]?.message?.content ?? ''
+  const parsed = kind === 'food' ? FoodEstimateSchema.parse(JSON.parse(content)) : ExerciseEstimateSchema.parse(JSON.parse(content))
   await cacheEstimate(userId, kind, inputHash, parsed)
   return { estimate: parsed, cached: false, limit: openAiEnv.aiDailyLimit, used: openAiEnv.aiDailyLimit - usage.remaining, remaining: usage.remaining }
 }
@@ -94,13 +96,20 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
         coachContext(request.userId),
       ])
       reply.raw.setHeader('Content-Type', 'text/event-stream'); reply.raw.setHeader('Cache-Control', 'no-cache'); reply.raw.setHeader('Connection', 'keep-alive'); reply.raw.flushHeaders()
-      const stream = await openai.responses.create({
+      const stream = await openai.chat.completions.create({
         model: openAiEnv.openaiModel,
-        input: [{ role: 'system', content: [{ type: 'input_text', text: system }] }, ...history.map((message) => ({ role: message.role, content: [{ type: 'input_text', text: message.content }] })), { role: 'user', content: [{ type: 'input_text', text: parsed.data.content }] }],
         stream: true,
-      } as never) as unknown as AsyncIterable<{ type: string; delta?: string }>
+        messages: [
+          { role: 'system', content: system },
+          ...history.map((message) => ({ role: message.role as 'user' | 'assistant', content: message.content })),
+          { role: 'user', content: parsed.data.content },
+        ],
+      })
       let responseText = ''
-      for await (const event of stream) if (event.type === 'response.output_text.delta' && event.delta) { responseText += event.delta; reply.raw.write(`event: delta\ndata: ${JSON.stringify({ text: event.delta })}\n\n`) }
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content
+        if (delta) { responseText += delta; reply.raw.write(`event: delta\ndata: ${JSON.stringify({ text: delta })}\n\n`) }
+      }
       await db.insert(agentMessages).values([
         { id: generateId(), userId: request.userId, sessionId: parsed.data.sessionId, role: 'user', content: parsed.data.content },
         { id: generateId(), userId: request.userId, sessionId: parsed.data.sessionId, role: 'assistant', content: responseText },
