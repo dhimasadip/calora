@@ -55,6 +55,16 @@ export async function consumeAiInvocation(userId: string) {
   return { allowed: true, remaining: Math.max(0, env.aiDailyLimit - count) }
 }
 
+// Returns one invocation to the daily quota when a request was counted but failed
+// before delivering a result, so failed requests don't burn the daily allowance.
+export async function refundAiInvocation(userId: string) {
+  const today = toDateStr()
+  const [usage] = await db.select().from(aiUsageDaily).where(and(eq(aiUsageDaily.userId, userId), eq(aiUsageDaily.date, today))).limit(1)
+  if (!usage) return
+  const count = Math.max(0, (usage.invocationCount ?? 0) - 1)
+  await db.update(aiUsageDaily).set({ invocationCount: count, updatedAt: new Date() }).where(eq(aiUsageDaily.id, usage.id))
+}
+
 export function assertOpenAiConfigured() {
   if (!env.openaiApiKey) {
     const error = new Error('AI estimates are not configured. Add OPENAI_API_KEY to enable them.')

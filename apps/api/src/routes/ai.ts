@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { and, asc, eq } from 'drizzle-orm'
 import { CoachMessageSchema, ExerciseEstimateRequestSchema, ExerciseEstimateSchema, FoodEstimateRequestSchema, FoodEstimateSchema } from '@calora/shared'
 import { db, agentMessages, exerciseEntries, foodEntries, userProfiles, users } from '../db/index.js'
-import { assertOpenAiConfigured, cacheEstimate, consumeAiInvocation, getAiUsage, getCachedEstimate, normalizedHash, openai, openAiEnv } from '../lib/openai.js'
+import { assertOpenAiConfigured, cacheEstimate, consumeAiInvocation, getAiUsage, getCachedEstimate, normalizedHash, openai, openAiEnv, refundAiInvocation } from '../lib/openai.js'
 import { generateId, toDateStr } from '../lib/utils.js'
 
 const FOOD_SCHEMA = {
@@ -35,21 +35,26 @@ async function estimate(userId: string, kind: 'food' | 'exercise', description: 
     ;(error as Error & { statusCode?: number }).statusCode = 429
     throw error
   }
-  assertOpenAiConfigured()
-  const context = kind === 'food'
-    ? `Estimate a single food entry from: ${description}. ${mealType ? `Use meal type ${mealType}.` : 'Choose the most likely meal type.'}`
-    : `Estimate a single workout from: ${description}. User weight is ${profile?.weightKg ?? 70} kg. Use MET-informed reasoning.`
-  const schema = kind === 'food' ? FOOD_SCHEMA : EXERCISE_SCHEMA
-  const instruction = `You estimate nutrition and exercise for Calora. Values are approximate, conservative, non-medical estimates. Do not give health advice. ${context}\n\nRespond with ONLY a single valid JSON object (no markdown, no extra text) matching this JSON schema:\n${JSON.stringify(schema)}`
-  const response = await openai.chat.completions.create({
-    model: openAiEnv.openaiModel,
-    messages: [{ role: 'user', content: instruction }],
-    response_format: { type: 'json_object' },
-  })
-  const content = response.choices[0]?.message?.content ?? ''
-  const parsed = kind === 'food' ? FoodEstimateSchema.parse(JSON.parse(content)) : ExerciseEstimateSchema.parse(JSON.parse(content))
-  await cacheEstimate(userId, kind, inputHash, parsed)
-  return { estimate: parsed, cached: false, limit: openAiEnv.aiDailyLimit, used: openAiEnv.aiDailyLimit - usage.remaining, remaining: usage.remaining }
+  try {
+    assertOpenAiConfigured()
+    const context = kind === 'food'
+      ? `Estimate a single food entry from: ${description}. ${mealType ? `Use meal type ${mealType}.` : 'Choose the most likely meal type.'}`
+      : `Estimate a single workout from: ${description}. User weight is ${profile?.weightKg ?? 70} kg. Use MET-informed reasoning.`
+    const schema = kind === 'food' ? FOOD_SCHEMA : EXERCISE_SCHEMA
+    const instruction = `You estimate nutrition and exercise for Calora. Values are approximate, conservative, non-medical estimates. Do not give health advice. ${context}\n\nRespond with ONLY a single valid JSON object (no markdown, no extra text) matching this JSON schema:\n${JSON.stringify(schema)}`
+    const response = await openai.chat.completions.create({
+      model: openAiEnv.openaiModel,
+      messages: [{ role: 'user', content: instruction }],
+      response_format: { type: 'json_object' },
+    })
+    const content = response.choices[0]?.message?.content ?? ''
+    const parsed = kind === 'food' ? FoodEstimateSchema.parse(JSON.parse(content)) : ExerciseEstimateSchema.parse(JSON.parse(content))
+    await cacheEstimate(userId, kind, inputHash, parsed)
+    return { estimate: parsed, cached: false, limit: openAiEnv.aiDailyLimit, used: openAiEnv.aiDailyLimit - usage.remaining, remaining: usage.remaining }
+  } catch (error) {
+    await refundAiInvocation(userId)
+    throw error
+  }
 }
 
 async function coachContext(userId: string) {
@@ -62,7 +67,7 @@ async function coachContext(userId: string) {
   ])
   const intake = foods.reduce((total, entry) => total + entry.calories, 0)
   const burned = exercises.reduce((total, entry) => total + entry.caloriesBurned, 0)
-  return `You are Calora's friendly nutrition coach. You cannot save, edit, or delete entries. Direct users to the Add food or Add workout actions for an editable estimate. Never give medical advice. Homemade food estimates are approximate.\nUser: ${user?.displayName ?? 'Calora member'}\nToday: ${today}; intake ${intake} kcal; burned ${burned} kcal; target ${profile?.dailyCalorieTarget ?? 2000} kcal.`
+  return `You are Calora's friendly nutrition coach. You cannot save, edit, or delete entries. Direct users to the Add food or Add workout actions for an editable estimate. Never give medical advice. Homemade food estimates are approximate. Keep replies concise and use clear formatting — short paragraphs, bullet points, and bold for key foods and numbers — so they're easy to scan.\nUser: ${user?.displayName ?? 'Calora member'}\nToday: ${today}; intake ${intake} kcal; burned ${burned} kcal; target ${profile?.dailyCalorieTarget ?? 2000} kcal.`
 }
 
 export const aiRoutes: FastifyPluginAsync = async (fastify) => {
@@ -87,9 +92,11 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/coach', { onRequest: [fastify.authenticate], ...rateLimit }, async (request, reply) => {
     const parsed = CoachMessageSchema.safeParse(request.body)
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten().fieldErrors })
+    let consumed = false
     try {
       const usage = await consumeAiInvocation(request.userId)
       if (!usage.allowed) return reply.status(429).send({ error: `Daily AI limit reached (${openAiEnv.aiDailyLimit}).` })
+      consumed = true
       assertOpenAiConfigured()
       const [history, system] = await Promise.all([
         db.select().from(agentMessages).where(and(eq(agentMessages.userId, request.userId), eq(agentMessages.sessionId, parsed.data.sessionId))).orderBy(asc(agentMessages.createdAt)).limit(16),
@@ -116,6 +123,7 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
       ])
       reply.raw.write(`event: done\ndata: ${JSON.stringify({ limit: openAiEnv.aiDailyLimit, used: openAiEnv.aiDailyLimit - usage.remaining, remaining: usage.remaining })}\n\n`); reply.raw.end()
     } catch (error) {
+      if (consumed) await refundAiInvocation(request.userId)
       if (!reply.raw.headersSent) return reply.status((error as Error & { statusCode?: number }).statusCode ?? 502).send({ error: (error as Error).message || 'Unable to reach the coach' })
       reply.raw.write(`event: error\ndata: ${JSON.stringify({ message: (error as Error).message || 'Unable to reach the coach' })}\n\n`); reply.raw.end()
     }
