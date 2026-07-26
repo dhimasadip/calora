@@ -27,6 +27,11 @@ export function ConfirmModalViewport() {
     return () => window.removeEventListener(CONFIRM_EVENT, open)
   }, [])
 
+  const close = useCallback((confirmed: boolean) => {
+    request?.resolve(confirmed)
+    setRequest(null)
+  }, [request])
+
   useEffect(() => {
     if (!request) return
     confirmButton.current?.focus()
@@ -36,11 +41,6 @@ export function ConfirmModalViewport() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [request, close])
-
-  const close = useCallback((confirmed: boolean) => {
-    request?.resolve(confirmed)
-    setRequest(null)
-  }, [request])
 
   if (!request) return null
 
