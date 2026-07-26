@@ -1,31 +1,18 @@
-import type { ActivityLevel, Goal, GoalIntensity, Plan, Sex } from '../calculations.js'
+import type { ActivityLevel, Goal, GoalIntensity, Sex } from '../calculations.js'
 
-export type { ActivityLevel, Goal, GoalIntensity, Plan, Sex }
+export type { ActivityLevel, Goal, GoalIntensity, Sex }
+
+export type EntrySource = 'manual' | 'ai'
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'other'
+export type WorkoutIntensity = 'low' | 'moderate' | 'high'
+export type DailyTargetMode = 'auto' | 'custom'
 
 export interface User {
   id: string
   email: string
   displayName: string
-  emailVerified: boolean
   onboardingComplete: boolean
-  plan: Plan
-  planExpiresAt: string | null
   createdAt: string
-}
-
-export interface RedeemPromoResponse {
-  plan: Plan
-  planExpiresAt: string | null
-}
-
-export interface ChatUsage {
-  plan: Plan
-  limit: number
-  used: number
-  remaining: number
-  // When the current limit window resets (tz-naive Jakarta wall-clock string), or null when
-  // no window is running yet (Pro: the 6h timer only starts on the first chat of a window).
-  resetAt: string | null
 }
 
 export interface UserProfile {
@@ -38,9 +25,12 @@ export interface UserProfile {
   goal: Goal
   goalIntensity: GoalIntensity
   targetWeightKg: number | null
+  targetDate: string | null
   bmr: number
   tdee: number
+  suggestedDailyCalorieTarget: number
   dailyCalorieTarget: number
+  dailyTargetMode: DailyTargetMode
   proteinTargetG: number
   carbsTargetG: number
   fatTargetG: number
@@ -48,68 +38,68 @@ export interface UserProfile {
   updatedAt: string
 }
 
-export interface FoodLog {
+export interface FoodEntry {
   id: string
   userId: string
-  loggedAt: string
   date: string
-  description: string
+  loggedAt: string
+  name: string
+  quantity: number
+  unit: string
   calories: number
   proteinG: number
   carbsG: number
   fatG: number
-  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'other'
-  source: 'agent' | 'manual'
+  mealType: MealType
+  source: EntrySource
   rawInput: string | null
+  version: number
+  createdAt: string
+  updatedAt: string
 }
 
-export interface WorkoutLog {
+export interface ExerciseEntry {
   id: string
   userId: string
-  loggedAt: string
   date: string
-  description: string
+  loggedAt: string
+  name: string
   workoutType: string
   durationMinutes: number
+  intensity: WorkoutIntensity
   caloriesBurned: number
-  source: 'agent' | 'manual'
+  notes: string | null
+  source: EntrySource
   rawInput: string | null
+  version: number
+  createdAt: string
+  updatedAt: string
 }
 
-export interface AgentMessage {
+export interface WeightLog {
   id: string
   userId: string
-  sessionId: string
-  role: 'user' | 'assistant'
-  content: string
-  createdAt: string
-}
-
-export interface DailySummary {
   date: string
-  caloriesIn: number
-  caloriesBurned: number
-  netCalories: number
-  dailyTarget: number
+  weightKg: number
+  version: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReminderPreferences {
+  mealReminderEnabled: boolean
+  mealReminderTime: string
+  weightReminderEnabled: boolean
+  weightReminderTime: string
+}
+
+export interface AiUsage {
+  limit: number
+  used: number
   remaining: number
-  proteinG: number
-  carbsG: number
-  fatG: number
-  foodLogs: FoodLog[]
-  workoutLogs: WorkoutLog[]
 }
 
-export interface WeeklySummary {
-  days: Array<{
-    date: string
-    caloriesIn: number
-    caloriesBurned: number
-    netCalories: number
-    target: number
-  }>
-}
-
-export interface RangeDay {
+export interface ReportDay {
   date: string
   caloriesIn: number
   caloriesBurned: number
@@ -117,21 +107,44 @@ export interface RangeDay {
   target: number
 }
 
-export interface RangeSummary {
+export interface ReportSummary {
   from: string
   to: string
   days: number
   caloriesIn: number
   caloriesBurned: number
   netCalories: number
+  targetCalories: number
+  remaining: number
   proteinG: number
   carbsG: number
   fatG: number
-  netTarget: number
   proteinTargetG: number
   carbsTargetG: number
   fatTargetG: number
-  daily: RangeDay[]
-  foodLogs: FoodLog[]
-  workoutLogs: WorkoutLog[]
+  daily: ReportDay[]
+  weightLogs: WeightLog[]
+}
+
+export interface FoodEstimate {
+  name: string
+  quantity: number
+  unit: string
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatG: number
+  mealType: MealType
+  confidence: number
+  rationale: string
+}
+
+export interface ExerciseEstimate {
+  name: string
+  workoutType: string
+  durationMinutes: number
+  intensity: WorkoutIntensity
+  caloriesBurned: number
+  confidence: number
+  rationale: string
 }

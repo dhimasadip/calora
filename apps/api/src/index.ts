@@ -10,9 +10,11 @@ import sensible from '@fastify/sensible'
 import authPlugin from './plugins/auth.js'
 import { authRoutes } from './routes/auth.js'
 import { onboardingRoutes } from './routes/onboarding.js'
-import { logsRoutes } from './routes/logs.js'
-import { agentRoutes } from './routes/agent.js'
-import { promoRoutes } from './routes/promo.js'
+import { entriesRoutes } from './routes/entries.js'
+import { aiRoutes } from './routes/ai.js'
+import { reportsRoutes } from './routes/reports.js'
+import { weightRoutes } from './routes/weight.js'
+import { settingsRoutes } from './routes/settings.js'
 import { loadEnv } from './lib/env.js'
 import { client as dbClient } from './db/index.js'
 
@@ -27,6 +29,13 @@ const fastify = Fastify({
   trustProxy: env.isProd,
   disableRequestLogging: false,
   bodyLimit: 1024 * 1024, // 1 MB
+})
+
+fastify.setErrorHandler((error, request, reply) => {
+  const knownError = error as { statusCode?: number; message: string }
+  const statusCode = knownError.statusCode && knownError.statusCode >= 400 ? knownError.statusCode : 500
+  request.log.error({ err: error, statusCode }, 'request failed')
+  return reply.status(statusCode).send({ error: statusCode >= 500 ? 'Something went wrong.' : knownError.message })
 })
 
 const start = async () => {
@@ -54,9 +63,11 @@ const start = async () => {
   // Routes
   await fastify.register(authRoutes, { prefix: '/api/v1/auth' })
   await fastify.register(onboardingRoutes, { prefix: '/api/v1/profile' })
-  await fastify.register(logsRoutes, { prefix: '/api/v1/logs' })
-  await fastify.register(agentRoutes, { prefix: '/api/v1/agent' })
-  await fastify.register(promoRoutes, { prefix: '/api/v1/promo' })
+  await fastify.register(entriesRoutes, { prefix: '/api/v1' })
+  await fastify.register(aiRoutes, { prefix: '/api/v1/ai' })
+  await fastify.register(reportsRoutes, { prefix: '/api/v1/reports' })
+  await fastify.register(weightRoutes, { prefix: '/api/v1/weight-logs' })
+  await fastify.register(settingsRoutes, { prefix: '/api/v1/settings' })
 
   // Health check
   fastify.get('/health', async () => ({ ok: true, uptime: process.uptime() }))

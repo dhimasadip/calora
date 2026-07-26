@@ -1,0 +1,18 @@
+import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ExerciseEntry, FoodEntry } from '@calora/shared'
+import { toDateStr } from '@calora/shared'
+import { caloraApi } from '@/lib/api'
+import { EntryComposer } from '@/components/entries/EntryComposer'
+import { showConfirmModal } from '@/components/ui/confirm-modal'
+
+type Selected = { kind: 'food' | 'workout'; entry: FoodEntry | ExerciseEntry } | null
+export default function History() {
+  const [params] = useSearchParams(); const [date, setDate] = useState(params.get('date') ?? toDateStr()); const [selected, setSelected] = useState<Selected>(null); const [filter, setFilter] = useState<'all' | 'food' | 'workout'>('all'); const client = useQueryClient()
+  const foods = useQuery({ queryKey: ['food-entries', date], queryFn: () => caloraApi.foods(date, date).then((result) => result.entries) }); const workouts = useQuery({ queryKey: ['workout-entries', date], queryFn: () => caloraApi.workouts(date, date).then((result) => result.entries) })
+  const rows = [...(foods.data ?? []).map((entry) => ({ kind: 'food' as const, entry })), ...(workouts.data ?? []).map((entry) => ({ kind: 'workout' as const, entry }))].filter((row) => filter === 'all' || row.kind === filter).sort((a, b) => new Date(b.entry.loggedAt).getTime() - new Date(a.entry.loggedAt).getTime())
+  const refresh = () => { void client.invalidateQueries({ queryKey: ['food-entries'] }); void client.invalidateQueries({ queryKey: ['workout-entries'] }); void client.invalidateQueries({ queryKey: ['report'] }) }
+  async function remove(kind: 'food' | 'workout', entry: FoodEntry | ExerciseEntry) { if (!await showConfirmModal({ title: 'Delete this entry?', description: `“${entry.name}” will be permanently removed from your log.`, confirmLabel: 'Delete entry', destructive: true })) return; if (kind === 'food') await caloraApi.deleteFood(entry.id, entry.version); else await caloraApi.deleteWorkout(entry.id, entry.version); refresh() }
+  return <main className="page-frame pb-28 lg:pb-10"><section className="page-title"><p className="eyebrow">Your record</p><h1>Every detail, yours to edit.</h1><p>Review the day, make a correction, and move on.</p></section><section className="history-tools"><input className="date-picker" type="date" value={date} max={toDateStr()} onChange={(event) => setDate(event.target.value)} /><div className="segmented compact">{(['all', 'food', 'workout'] as const).map((value) => <button key={value} onClick={() => setFilter(value)} className={filter === value ? 'selected' : ''}>{value}</button>)}</div></section><section className="history-list">{rows.map(({ kind, entry }) => <div className="history-row" key={`${kind}-${entry.id}`}><span className={`entry-icon ${kind}`}>{kind === 'food' ? '🍽️' : '⚡'}</span><button className="history-open" onClick={() => setSelected({ kind, entry })}><span><b>{entry.name}</b><small>{kind === 'food' ? `${entry.mealType} · ${entry.quantity} ${entry.unit}` : `${entry.workoutType} · ${entry.durationMinutes} minutes`}</small></span><strong className={kind === 'workout' ? 'burned' : ''}>{kind === 'food' ? '+' : '−'}{kind === 'food' ? entry.calories : entry.caloriesBurned}</strong><i>›</i></button><button className="delete-entry" onClick={() => void remove(kind, entry)} aria-label={`Delete ${entry.name}`}>×</button></div>)}{!rows.length && <div className="empty-log"><span>🍊</span><h3>An open page</h3><p>There are no entries for this day yet.</p></div>}</section>{selected && <EntryComposer kind={selected.kind} entry={selected.entry} open onClose={() => setSelected(null)} onSaved={refresh} />}</main>
+}

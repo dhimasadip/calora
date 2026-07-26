@@ -1,13 +1,13 @@
 # Calora
 
-Self-hosted, AI-powered calorie tracking app. Dual-panel UX: chat with Claude on the left, real-time visualizations on the right.
+Self-hosted, AI-powered calorie and wellness tracker. Calora combines reviewed AI estimates, manual logging, weight trends, local reminders, and an offline-capable daily dashboard.
 
-See [PRD_CalorieTracker_App.md](PRD_CalorieTracker_App.md) for full specs and [implementation-plan.md](implementation-plan.md) for progress.
+See [calora-web-prd.md](calora-web-prd.md) for the product requirements.
 
 ## Stack
 - **Web**: React 18 + Vite 5 + Tailwind v4 + shadcn/ui + Recharts
 - **API**: Fastify v5 + Drizzle ORM + PostgreSQL 16
-- **AI**: Anthropic Claude (`claude-sonnet-4-5`) via SSE streaming + tool use
+- **AI**: OpenAI Responses API via the official `openai` SDK; editable food/workout estimates and a read-only streaming coach
 - **Monorepo**: pnpm Workspaces
 
 ## Quick start (dev)
@@ -15,13 +15,15 @@ See [PRD_CalorieTracker_App.md](PRD_CalorieTracker_App.md) for full specs and [i
 ```bash
 # 1. Copy env file and fill in secrets
 cp .env.example .env
-# Set ANTHROPIC_API_KEY and rotate JWT_SECRET / JWT_REFRESH_SECRET
+# Set OPENAI_API_KEY and rotate JWT_SECRET / JWT_REFRESH_SECRET
 
 # 2. Install dependencies
 pnpm install
 
 # 3. Start Postgres
 docker compose up -d db
+
+# The local database is available at localhost:5435.
 
 # 4. Push DB schema (dev) or generate + run migrations
 pnpm db:push

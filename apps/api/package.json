@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "TMPDIR=/tmp tsx watch src/index.ts",
     "build": "tsup src/index.ts --format esm --out-dir dist",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
@@ -13,10 +13,10 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "expire-plans": "tsx src/scripts/expire-pro-plans.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.30.0",
     "@calora/shared": "workspace:*",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.2.0",
@@ -29,7 +29,7 @@
     "drizzle-orm": "^0.30.10",
     "fastify": "^5.0.0",
     "fastify-plugin": "^5.1.0",
-    "nodemailer": "^6.9.14",
+    "openai": "^6.22.0",
     "postgres": "^3.4.4",
     "zod": "^3.23.8"
   },
@@ -37,7 +37,6 @@
     "@eslint/js": "^9.9.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.0",
-    "@types/nodemailer": "^6.4.15",
     "drizzle-kit": "^0.21.4",
     "eslint": "^9.9.0",
     "globals": "^15.9.0",
