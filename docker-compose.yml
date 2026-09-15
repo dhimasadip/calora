@@ -1,50 +1,13 @@
 services:
-  db:
-    image: postgres:18-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-calora_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: ${POSTGRES_DB:-calora}
-    volumes:
-      - postgres_data:/var/lib/postgresql
-    # Bind to loopback only: reachable from the host (for SSH-tunneled clients like DBeaver)
-    # but never exposed to the public internet. Host port 5435 avoids conflicts with local Postgres.
-    ports:
-      - "127.0.0.1:5435:5432"
-    expose:
-      - "5432"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-calora_user} -d ${POSTGRES_DB:-calora}",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  adminer:
-    image: adminer:latest
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    depends_on:
-      db:
-        condition: service_healthy
-    profiles:
-      - dev
-
   migrate:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
       target: migrate
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-calora_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-calora}
-    depends_on:
-      db:
-        condition: service_healthy
+      DATABASE_URL: postgresql://${POSTGRES_USER:-calora_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-calora}
+    networks:
+      - shared_net
     restart: "no"
 
   api:
@@ -52,9 +15,10 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
       target: runner
+    container_name: calora_api
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-calora_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-calora}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-calora_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-calora}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
@@ -67,15 +31,15 @@ services:
       AI_PRICE_OUTPUT_PER_M: ${AI_PRICE_OUTPUT_PER_M:-1.10}
       APP_URL: ${APP_URL:-http://localhost}
       NODE_ENV: production
-      PORT: "3001"
+      PORT: "${API_PORT:-3010}"
       PRIVACY_CONTACT_EMAIL: ${PRIVACY_CONTACT_EMAIL:-privacy@calora.local}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     expose:
-      - "3001"
+      - "${API_PORT:-3010}"
+    networks:
+      - shared_net
     depends_on:
-      db:
-        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     healthcheck:
@@ -86,7 +50,7 @@ services:
           "--quiet",
           "--tries=1",
           "--spider",
-          "http://localhost:3001/health",
+          "http://localhost:${API_PORT:-3010}/health",
         ]
       interval: 30s
       timeout: 5s
@@ -97,9 +61,10 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+    container_name: calora_web
     restart: unless-stopped
-    ports:
-      - "${WEB_PORT:-80}:80"
+    networks:
+      - shared_net
     depends_on:
       api:
         condition: service_healthy
@@ -110,5 +75,6 @@ services:
       timeout: 5s
       retries: 3
 
-volumes:
-  postgres_data:
+networks:
+  shared_net:
+    external: true
