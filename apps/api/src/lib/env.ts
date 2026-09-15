@@ -8,7 +8,7 @@ export function loadEnv() {
 
   return {
     isProd,
-    port: Number.parseInt(process.env.PORT ?? '3001', 10),
+    port: Number.parseInt(process.env.API_PORT ?? process.env.PORT ?? '3001', 10),
     jwtSecret: process.env.JWT_SECRET ?? 'dev-secret-change-me-not-for-production',
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'dev-refresh-secret-change-me',
     openaiApiKey: process.env.OPENAI_API_KEY ?? '',
