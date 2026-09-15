@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
+import { AdminAuthProvider, useAdminAuth } from '@/contexts/AdminAuthContext'
 import { AppShell } from '@/components/app/AppShell'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
@@ -9,6 +10,8 @@ import Insights from '@/pages/Insights'
 import History from '@/pages/History'
 import Settings from '@/pages/Settings'
 import Privacy from '@/pages/Privacy'
+import AdminLogin from '@/pages/AdminLogin'
+import AdminDashboard from '@/pages/AdminDashboard'
 
 function Protected({ children, onboarding = true }: { children: React.ReactNode; onboarding?: boolean }) {
   const { user, loading } = useAuth()
@@ -25,4 +28,18 @@ function Public({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-export default function App() { return <AuthProvider><BrowserRouter><Routes><Route path="/login" element={<Public><Login /></Public>} /><Route path="/register" element={<Public><Register /></Public>} /><Route path="/onboarding" element={<Protected onboarding={false}><Onboarding /></Protected>} /><Route path="/privacy" element={<Privacy />} /><Route element={<Protected><AppShell /></Protected>}><Route path="/" element={<Dashboard />} /><Route path="/insights" element={<Insights />} /><Route path="/history" element={<History />} /><Route path="/settings" element={<Settings />} /></Route><Route path="*" element={<Navigate to="/" replace />} /></Routes></BrowserRouter></AuthProvider> }
+function AdminProtected({ children }: { children: React.ReactNode }) {
+  const { admin, loading } = useAdminAuth()
+  if (loading) return <div className="app-loading">Opening the admin console…</div>
+  if (!admin) return <Navigate to="/admin/login" replace />
+  return <>{children}</>
+}
+
+function AdminPublic({ children }: { children: React.ReactNode }) {
+  const { admin, loading } = useAdminAuth()
+  if (loading) return <div className="app-loading">Opening the admin console…</div>
+  if (admin) return <Navigate to="/admin" replace />
+  return <>{children}</>
+}
+
+export default function App() { return <AuthProvider><AdminAuthProvider><BrowserRouter><Routes><Route path="/login" element={<Public><Login /></Public>} /><Route path="/register" element={<Public><Register /></Public>} /><Route path="/onboarding" element={<Protected onboarding={false}><Onboarding /></Protected>} /><Route path="/privacy" element={<Privacy />} /><Route path="/admin/login" element={<AdminPublic><AdminLogin /></AdminPublic>} /><Route path="/admin" element={<AdminProtected><AdminDashboard /></AdminProtected>} /><Route element={<Protected><AppShell /></Protected>}><Route path="/" element={<Dashboard />} /><Route path="/insights" element={<Insights />} /><Route path="/history" element={<History />} /><Route path="/settings" element={<Settings />} /></Route><Route path="*" element={<Navigate to="/" replace />} /></Routes></BrowserRouter></AdminAuthProvider></AuthProvider> }

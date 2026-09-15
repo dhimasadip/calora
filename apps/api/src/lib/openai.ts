@@ -1,8 +1,9 @@
 import OpenAI from 'openai'
 import { createHash } from 'node:crypto'
 import { and, eq, gt } from 'drizzle-orm'
-import { db, aiEstimateCache, aiUsageDaily } from '../db/index.js'
+import { db, aiEstimateCache, aiUsageDaily, aiUsageLogs } from '../db/index.js'
 import { loadEnv } from './env.js'
+import { computeAiUsage } from './ai-cost.js'
 import { generateId, toDateStr } from './utils.js'
 
 const env = loadEnv()
@@ -70,6 +71,17 @@ export function assertOpenAiConfigured() {
     const error = new Error('AI estimates are not configured. Add OPENAI_API_KEY to enable them.')
     ;(error as Error & { statusCode?: number }).statusCode = 503
     throw error
+  }
+}
+
+export async function recordAiUsage(userId: string, kind: 'food_estimate' | 'exercise_estimate' | 'coach', model: string, usage: unknown) {
+  const record = computeAiUsage(usage)
+  if (!record) return
+  try {
+    await db.insert(aiUsageLogs).values({ id: generateId(), userId, kind, model, ...record })
+  } catch (error) {
+    // Accounting must never break a successful AI response; quota tracking stays intact.
+    console.error('Failed to record AI usage', error)
   }
 }
 

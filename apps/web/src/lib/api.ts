@@ -1,4 +1,4 @@
-import type { AiUsage, ExerciseEstimate, ExerciseEntry, FoodEstimate, FoodEntry, ReminderPreferences, ReportSummary, UserProfile, WeightLog } from '@calora/shared'
+import type { AdminUsageSummary, AiUsage, ExerciseEstimate, ExerciseEntry, FoodEstimate, FoodEntry, ReminderPreferences, ReportSummary, UserProfile, WeightLog } from '@calora/shared'
 import { showErrorToast } from '@/components/ui/toast'
 
 const API_BASE = '/api/v1'
@@ -37,7 +37,7 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...rest, credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...headers },
+      headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
@@ -45,7 +45,7 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
     notifyError(message, suppressToast)
     throw new ApiError(0, message)
   }
-  if (response.status === 401 && !['/auth/refresh', '/auth/me', '/auth/login', '/auth/register'].includes(path)) {
+  if (response.status === 401 && !['/auth/refresh', '/auth/me', '/auth/login', '/auth/register', '/admin/me', '/admin/login'].includes(path)) {
     const refresh = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' })
     if (refresh.ok) return api(path, options)
   }
@@ -79,6 +79,13 @@ export const caloraApi = {
   saveWeight: (body: unknown) => api<{ log: WeightLog }>('/weight-logs', { method: 'POST', body }),
   reminders: () => api<{ preferences: ReminderPreferences }>('/settings/reminders'),
   saveReminders: (body: ReminderPreferences) => api<{ preferences: ReminderPreferences }>('/settings/reminders', { method: 'PUT', body }),
+}
+
+export const adminApi = {
+  login: (email: string, password: string) => api<{ admin: boolean }>('/admin/login', { method: 'POST', body: { email, password } }),
+  logout: () => api<{ ok: boolean }>('/admin/logout', { method: 'POST' }),
+  me: () => api<{ admin: boolean }>('/admin/me', { suppressToast: true }),
+  usage: () => api<AdminUsageSummary>('/admin/usage'),
 }
 
 export async function streamCoach(content: string, sessionId: string, handlers: { onDelta(text: string): void; onError(message: string): void; onDone(usage: AiUsage): void }) {

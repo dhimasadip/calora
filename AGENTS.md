@@ -67,7 +67,7 @@ docker compose down
 | Charts | Recharts | Composable React chart components |
 | ORM | Drizzle ORM | Schema-as-code in `apps/api/src/db/schema.ts`; migrations in `apps/api/src/db/migrations/` |
 | Auth | `@fastify/jwt` + `@fastify/cookie` | JWT access token (15 min) + refresh token (30 days) in HttpOnly, SameSite=Strict cookies |
-| AI | Anthropic SDK (`@anthropic-ai/sdk`) → GLM 5.2 | `@anthropic-ai/sdk` pointed at GLM's Anthropic-compatible endpoint (Z.ai/Zhipu) via `baseURL`; streamed responses via SSE; agent has access to user profile + today's logs |
+| AI | OpenAI SDK (`openai`) → DeepSeek v4 pro | Official `openai` SDK pointed at DeepSeek's OpenAI-compatible endpoint via `baseURL`; streamed responses via SSE; agent has access to user profile + today's logs |
 
 ## Architecture Patterns
 
@@ -96,8 +96,8 @@ Implemented in `packages/shared/src/calculations.ts`. Use Mifflin-St Jeor:
 MET-based: `Calories = MET × weight_kg × duration_hours`. MET values live in `packages/shared/src/constants.ts`.
 
 ### AI Agent Integration
-- Frontend streams SSE from `POST /api/v1/agent/message`
-- Agent context injected server-side: user profile, today's log, last 30 days
+- Frontend streams SSE from `POST /api/v1/ai/coach`
+- Agent context injected server-side: user profile, today's log
 - Agent must not give medical advice; caveat approximations for homemade food; ask one clarifying question when ambiguous
 
 ## Database Schema (Core Tables)
@@ -107,6 +107,7 @@ MET-based: `Calories = MET × weight_kg × duration_hours`. MET values live in `
 - **food_logs**: `id, user_id, logged_at, description, calories, protein_g, carbs_g, fat_g, meal_type, source, raw_input`
 - **workout_logs**: `id, user_id, logged_at, description, workout_type, duration_minutes, calories_burned, source, raw_input`
 - **agent_messages**: `id, user_id, session_id, role, content, created_at`
+- **ai_usage_logs**: `id, user_id, kind, model, prompt_tokens, completion_tokens, total_tokens, prompt_cache_hit_tokens, prompt_cache_miss_tokens, cost_usd, created_at`
 
 ## Environment Variables
 
@@ -114,9 +115,16 @@ MET-based: `Calories = MET × weight_kg × duration_hours`. MET values live in `
 DATABASE_URL          # PostgreSQL connection string
 JWT_SECRET            # access token secret
 JWT_REFRESH_SECRET    # refresh token secret
-ANTHROPIC_API_KEY     # Z.ai/Zhipu API key for GLM
-ANTHROPIC_BASE_URL    # optional; defaults to https://api.z.ai/api/anthropic
-ANTHROPIC_MODEL       # optional; defaults to glm-5.2
+OPENAI_API_KEY        # DeepSeek API key (platform.deepseek.com); never sent to browsers
+OPENAI_BASE_URL       # optional; defaults to https://api.deepseek.com (OpenAI-compatible)
+OPENAI_MODEL          # optional; defaults to deepseek-v4-pro
+AI_DAILY_LIMIT        # optional; daily AI invocations per user
+AI_CACHE_TTL_HOURS    # optional; estimate cache TTL
+AI_PRICE_INPUT_PER_M  # optional; USD per 1M input tokens (default 0.27)
+AI_PRICE_INPUT_CACHE_HIT_PER_M  # optional; USD per 1M cache-hit input tokens (default 0.07)
+AI_PRICE_OUTPUT_PER_M # optional; USD per 1M output tokens (default 1.10)
+ADMIN_EMAIL           # optional; admin console login (AI cost dashboard at /admin)
+ADMIN_PASSWORD        # optional; admin console password (plaintext, timing-safe compare)
 SMTP_HOST             # optional, for password reset emails
 APP_URL               # public URL of the app
 NODE_ENV              # development | production

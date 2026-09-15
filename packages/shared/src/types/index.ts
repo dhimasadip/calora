@@ -99,6 +99,40 @@ export interface AiUsage {
   remaining: number
 }
 
+export interface AdminUsageByUser {
+  userId: string
+  email: string
+  displayName: string
+  calls: number
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  cacheHitTokens: number
+  costUsd: number
+}
+
+export interface AdminUsageByDay {
+  date: string
+  costUsd: number
+  totalTokens: number
+  calls: number
+}
+
+export interface AdminUsageSummary {
+  totals: {
+    costUsd: number
+    calls: number
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    cacheHitTokens: number
+    users: number
+    byKind: { foodEstimate: number; exerciseEstimate: number; coach: number }
+  }
+  byDay: AdminUsageByDay[]
+  byUser: AdminUsageByUser[]
+}
+
 export interface ReportDay {
   date: string
   caloriesIn: number
