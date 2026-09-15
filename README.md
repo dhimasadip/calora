@@ -7,7 +7,7 @@ See [calora-web-prd.md](calora-web-prd.md) for the product requirements.
 ## Stack
 - **Web**: React 18 + Vite 5 + Tailwind v4 + shadcn/ui + Recharts
 - **API**: Fastify v5 + Drizzle ORM + PostgreSQL 16
-- **AI**: OpenAI Responses API via the official `openai` SDK; editable food/workout estimates and a read-only streaming coach
+- **AI**: DeepSeek v4 pro via its OpenAI-compatible API using the official `openai` SDK; editable food/workout estimates and a read-only streaming coach
 - **Monorepo**: pnpm Workspaces
 
 ## Quick start (dev)

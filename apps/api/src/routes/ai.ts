@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { and, asc, eq } from 'drizzle-orm'
 import { CoachMessageSchema, ExerciseEstimateRequestSchema, ExerciseEstimateSchema, FoodEstimateRequestSchema, FoodEstimateSchema } from '@calora/shared'
 import { db, agentMessages, exerciseEntries, foodEntries, userProfiles, users } from '../db/index.js'
-import { assertOpenAiConfigured, cacheEstimate, consumeAiInvocation, getAiUsage, getCachedEstimate, normalizedHash, openai, openAiEnv, refundAiInvocation } from '../lib/openai.js'
+import { assertOpenAiConfigured, cacheEstimate, consumeAiInvocation, getAiUsage, getCachedEstimate, normalizedHash, openai, openAiEnv, recordAiUsage, refundAiInvocation } from '../lib/openai.js'
 import { generateId, toDateStr } from '../lib/utils.js'
 
 const FOOD_SCHEMA = {
@@ -47,6 +47,7 @@ async function estimate(userId: string, kind: 'food' | 'exercise', description: 
       messages: [{ role: 'user', content: instruction }],
       response_format: { type: 'json_object' },
     })
+    await recordAiUsage(userId, kind === 'food' ? 'food_estimate' : 'exercise_estimate', openAiEnv.openaiModel, response.usage)
     const content = response.choices[0]?.message?.content ?? ''
     const parsed = kind === 'food' ? FoodEstimateSchema.parse(JSON.parse(content)) : ExerciseEstimateSchema.parse(JSON.parse(content))
     await cacheEstimate(userId, kind, inputHash, parsed)
@@ -106,6 +107,7 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
       const stream = await openai.chat.completions.create({
         model: openAiEnv.openaiModel,
         stream: true,
+        stream_options: { include_usage: true },
         messages: [
           { role: 'system', content: system },
           ...history.map((message) => ({ role: message.role as 'user' | 'assistant', content: message.content })),
@@ -113,10 +115,13 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
         ],
       })
       let responseText = ''
+      let lastUsage: unknown = null
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta?.content
         if (delta) { responseText += delta; reply.raw.write(`event: delta\ndata: ${JSON.stringify({ text: delta })}\n\n`) }
+        if (chunk.usage) lastUsage = chunk.usage
       }
+      await recordAiUsage(request.userId, 'coach', openAiEnv.openaiModel, lastUsage)
       await db.insert(agentMessages).values([
         { id: generateId(), userId: request.userId, sessionId: parsed.data.sessionId, role: 'user', content: parsed.data.content },
         { id: generateId(), userId: request.userId, sessionId: parsed.data.sessionId, role: 'assistant', content: responseText },

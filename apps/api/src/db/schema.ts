@@ -1,4 +1,4 @@
-import { boolean, date, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
+import { boolean, date, doublePrecision, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
 export const sexEnum = pgEnum('sex', ['male', 'female'])
@@ -12,6 +12,7 @@ export const intensityEnum = pgEnum('workout_intensity', ['low', 'moderate', 'hi
 export const messageRoleEnum = pgEnum('message_role', ['user', 'assistant'])
 export const unitPreferenceEnum = pgEnum('unit_preference', ['metric', 'imperial'])
 export const estimateKindEnum = pgEnum('estimate_kind', ['food', 'exercise'])
+export const aiUsageKindEnum = pgEnum('ai_usage_kind', ['food_estimate', 'exercise_estimate', 'coach'])
 
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
@@ -135,6 +136,22 @@ export const aiUsageDaily = pgTable('ai_usage_daily', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 }, (table) => ({
   usageKey: uniqueIndex('ai_usage_daily_user_date_unique').on(table.userId, table.date),
+}))
+
+export const aiUsageLogs = pgTable('ai_usage_logs', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: aiUsageKindEnum('kind').notNull(),
+  model: text('model').notNull(),
+  promptTokens: integer('prompt_tokens').notNull(),
+  completionTokens: integer('completion_tokens').notNull(),
+  totalTokens: integer('total_tokens').notNull(),
+  promptCacheHitTokens: integer('prompt_cache_hit_tokens').notNull().default(0),
+  promptCacheMissTokens: integer('prompt_cache_miss_tokens').notNull().default(0),
+  costUsd: doublePrecision('cost_usd').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  userCreatedIdx: index('ai_usage_logs_user_created_idx').on(table.userId, table.createdAt),
 }))
 
 export const reminderPreferences = pgTable('reminder_preferences', {
