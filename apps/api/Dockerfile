@@ -39,7 +39,7 @@ RUN apk add --no-cache wget tini && \
     adduser -S -u 1001 -G nodejs nodejs
 
 ENV NODE_ENV=production \
-    PORT=3001
+    API_PORT=3010
 
 COPY --from=prod-deps --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=prod-deps --chown=nodejs:nodejs /app/apps/api/node_modules ./apps/api/node_modules
@@ -51,7 +51,7 @@ COPY --chown=nodejs:nodejs ./apps/api/drizzle.config.ts ./apps/api/drizzle.confi
 
 USER nodejs
 
-EXPOSE 3001
+EXPOSE 3010
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "apps/api/dist/index.js"]
 
