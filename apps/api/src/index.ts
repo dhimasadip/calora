@@ -9,6 +9,7 @@ import rateLimit from '@fastify/rate-limit'
 import sensible from '@fastify/sensible'
 import authPlugin from './plugins/auth.js'
 import { authRoutes } from './routes/auth.js'
+import { adminRoutes } from './routes/admin.js'
 import { onboardingRoutes } from './routes/onboarding.js'
 import { entriesRoutes } from './routes/entries.js'
 import { aiRoutes } from './routes/ai.js'
@@ -62,6 +63,7 @@ const start = async () => {
 
   // Routes
   await fastify.register(authRoutes, { prefix: '/api/v1/auth' })
+  await fastify.register(adminRoutes, { prefix: '/api/v1/admin' })
   await fastify.register(onboardingRoutes, { prefix: '/api/v1/profile' })
   await fastify.register(entriesRoutes, { prefix: '/api/v1' })
   await fastify.register(aiRoutes, { prefix: '/api/v1/ai' })

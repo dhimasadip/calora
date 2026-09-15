@@ -7,6 +7,7 @@ declare module 'fastify' {
   interface FastifyRequest {
     userId: string
     userEmail: string
+    isAdmin?: boolean
   }
 }
 
@@ -25,11 +26,25 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       return reply.status(401).send({ error: 'Unauthorized' })
     }
   })
+
+  fastify.decorate('authenticateAdmin', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await request.jwtVerify()
+      const payload = request.user as { sub: string; admin?: boolean }
+      if (payload.sub !== 'admin' || payload.admin !== true) {
+        return reply.status(401).send({ error: 'Unauthorized' })
+      }
+      request.isAdmin = true
+    } catch {
+      return reply.status(401).send({ error: 'Unauthorized' })
+    }
+  })
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
+    authenticateAdmin: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
   }
 }
 

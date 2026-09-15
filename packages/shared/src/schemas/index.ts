@@ -11,6 +11,35 @@ export const RegisterSchema = z.object({
 export const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(1) })
 export const DeleteAccountSchema = z.object({ password: z.string().min(1) })
 
+export const AdminLoginSchema = z.object({ email: z.string().email(), password: z.string().min(1) })
+
+export const AdminUsageTotalsSchema = z.object({
+  costUsd: z.number(),
+  calls: z.number().int(),
+  promptTokens: z.number().int(),
+  completionTokens: z.number().int(),
+  totalTokens: z.number().int(),
+  cacheHitTokens: z.number().int(),
+  users: z.number().int(),
+  byKind: z.object({ foodEstimate: z.number().int(), exerciseEstimate: z.number().int(), coach: z.number().int() }),
+})
+
+export const AdminUsageResponseSchema = z.object({
+  totals: AdminUsageTotalsSchema,
+  byDay: z.array(z.object({ date: DateSchema, costUsd: z.number(), totalTokens: z.number().int(), calls: z.number().int() })),
+  byUser: z.array(z.object({
+    userId: z.string(),
+    email: z.string(),
+    displayName: z.string(),
+    calls: z.number().int(),
+    promptTokens: z.number().int(),
+    completionTokens: z.number().int(),
+    totalTokens: z.number().int(),
+    cacheHitTokens: z.number().int(),
+    costUsd: z.number(),
+  })),
+})
+
 const ProfileFields = z.object({
   dateOfBirth: DateSchema,
   sex: z.enum(['male', 'female']),

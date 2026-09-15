@@ -123,6 +123,8 @@ AI_CACHE_TTL_HOURS    # optional; estimate cache TTL
 AI_PRICE_INPUT_PER_M  # optional; USD per 1M input tokens (default 0.27)
 AI_PRICE_INPUT_CACHE_HIT_PER_M  # optional; USD per 1M cache-hit input tokens (default 0.07)
 AI_PRICE_OUTPUT_PER_M # optional; USD per 1M output tokens (default 1.10)
+ADMIN_EMAIL           # optional; admin console login (AI cost dashboard at /admin)
+ADMIN_PASSWORD        # optional; admin console password (plaintext, timing-safe compare)
 SMTP_HOST             # optional, for password reset emails
 APP_URL               # public URL of the app
 NODE_ENV              # development | production
