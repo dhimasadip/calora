@@ -1,8 +1,10 @@
-name: Deploy to EC2
+name: Deploy to VPS
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+  workflow_dispatch: {}
 
 jobs:
   ci:
@@ -16,8 +18,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'pnpm'
+          node-version: "22"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -32,53 +34,31 @@ jobs:
     name: Deploy
     needs: ci
     runs-on: ubuntu-latest
-    environment: production
-    # Hanya deploy jika push langsung ke main (bukan dari PR)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          # Timeout per command (detik)
-          command_timeout: 15m
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
           script: |
             set -e
+            cd /opt/apps/calora
 
-            cd ~/calora
-
-            echo "==> Pulling latest code..."
+            echo "Pulling latest code..."
             git pull origin main
 
-            echo "==> Building Docker images..."
+            echo "Building images..."
             docker compose build
 
-            echo "==> Running database migrations..."
-            # Remove old migrate container so it always re-runs on every deploy
-            docker compose rm -f migrate 2>/dev/null || true
+            echo "Running migrations..."
             docker compose run --rm migrate
-            echo "==> Migrations complete."
 
-            echo "==> Restarting services..."
+            echo "Recreating containers..."
             docker compose up -d
 
-            echo "==> Waiting for services to become healthy..."
-            for i in $(seq 1 12); do
-              STATUS=$(docker inspect --format='{{.State.Health.Status}}' calora-web-1 2>/dev/null || echo "not found")
-              echo "  web status: $STATUS (attempt $i/12)"
-              [ "$STATUS" = "healthy" ] && break
-              sleep 10
-            done
+            echo "Cleaning up old images..."
+            docker image prune -f
 
-            echo "==> Health check..."
-            docker compose ps
-            WEB_PORT=$(grep WEB_PORT .env 2>/dev/null | cut -d= -f2 || echo "80")
-            curl -sf http://localhost:${WEB_PORT}/ || (echo "Health check failed!" && exit 1)
-
-            echo "==> Cleaning up unused Docker resources..."
-            docker system prune -f
-
-            echo "==> Deploy complete!"
+            echo "Deploy complete."
