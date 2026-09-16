@@ -14,3 +14,9 @@ export function parseScopeResponse(content: string): boolean {
     return false
   }
 }
+
+export function scopeRefusalMessage(kind: 'food' | 'exercise'): string {
+  return kind === 'food'
+    ? "That doesn't look like a food or meal. Describe what you ate or drank (e.g. 'chicken salad sandwich') and Calora will estimate it."
+    : "That doesn't look like a workout. Describe the exercise (e.g. '30 minute jog') and Calora will estimate the calories burned."
+}

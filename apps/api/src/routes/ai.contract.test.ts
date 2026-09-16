@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ExerciseEstimateSchema, FoodEstimateSchema } from '@calora/shared'
-import { parseScopeResponse } from '../lib/scope.js'
+import { parseScopeResponse, scopeRefusalMessage } from '../lib/scope.js'
 
 describe('AI estimate response contracts', () => {
   it('accepts editable food and workout drafts without persistence fields', () => {
@@ -23,5 +23,12 @@ describe('coach scope classifier parsing', () => {
     expect(parseScopeResponse('not json')).toBe(false)
     expect(parseScopeResponse('{}')).toBe(false)
     expect(parseScopeResponse('{"inScope":"true"}')).toBe(false)
+  })
+})
+
+describe('estimate scope refusal messages', () => {
+  it('returns kind-specific refusals', () => {
+    expect(scopeRefusalMessage('food')).toContain('food or meal')
+    expect(scopeRefusalMessage('exercise')).toContain('workout')
   })
 })
