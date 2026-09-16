@@ -21,6 +21,11 @@ export function loadEnv() {
     aiOutputPricePerM: parseFloat(process.env.AI_PRICE_OUTPUT_PER_M ?? '1.10') || 1.1,
     appUrl: process.env.APP_URL ?? 'http://localhost:5173',
     privacyContactEmail: process.env.PRIVACY_CONTACT_EMAIL ?? 'privacy@calora.local',
+    smtpUser: process.env.SMTP_USER ?? '',
+    smtpPass: process.env.SMTP_PASS ?? '',
+    smtpFrom: process.env.SMTP_FROM ?? '',
+    smtpHost: process.env.SMTP_HOST ?? '',
+    smtpPort: Number.parseInt(process.env.SMTP_PORT ?? '587', 10),
     adminEmail: process.env.ADMIN_EMAIL ?? '',
     adminPassword: process.env.ADMIN_PASSWORD ?? '',
   }

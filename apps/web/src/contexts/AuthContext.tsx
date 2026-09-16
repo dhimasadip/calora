@@ -18,7 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const refresh = useCallback(async () => { try { setUser((await api<{ user: User }>('/auth/me', { suppressToast: true })).user) } catch { setUser(null) } }, [])
   const login = useCallback(async (email: string, password: string) => { setUser((await api<{ user: User }>('/auth/login', { method: 'POST', body: { email, password } })).user) }, [])
-  const register = useCallback(async (email: string, password: string, displayName: string) => { setUser((await api<{ user: User }>('/auth/register', { method: 'POST', body: { email, password, displayName } })).user) }, [])
+  const register = useCallback(async (email: string, password: string, displayName: string) => { await api('/auth/register', { method: 'POST', body: { email, password, displayName } }) }, [])
   const logout = useCallback(async () => { try { await api('/auth/logout', { method: 'POST' }) } finally { setUser(null) } }, [])
   useEffect(() => { refresh().finally(() => setLoading(false)) }, [refresh])
   const value = useMemo(() => ({ user, loading, login, register, logout, refresh }), [user, loading, login, register, logout, refresh])

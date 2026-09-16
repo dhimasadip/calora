@@ -10,6 +10,8 @@ export const RegisterSchema = z.object({
 
 export const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(1) })
 export const DeleteAccountSchema = z.object({ password: z.string().min(1) })
+export const VerifyEmailSchema = z.object({ token: z.string().trim().min(1).max(512) })
+export const ResendVerificationSchema = z.object({ email: z.string().email() })
 
 export const AdminLoginSchema = z.object({ email: z.string().email(), password: z.string().min(1) })
 

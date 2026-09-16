@@ -4,6 +4,7 @@ import { AdminAuthProvider, useAdminAuth } from '@/contexts/AdminAuthContext'
 import { AppShell } from '@/components/app/AppShell'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
+import VerifyEmail from '@/pages/VerifyEmail'
 import Onboarding from '@/pages/Onboarding'
 import Dashboard from '@/pages/Dashboard'
 import Insights from '@/pages/Insights'
@@ -42,4 +43,4 @@ function AdminPublic({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-export default function App() { return <AuthProvider><AdminAuthProvider><BrowserRouter><Routes><Route path="/login" element={<Public><Login /></Public>} /><Route path="/register" element={<Public><Register /></Public>} /><Route path="/onboarding" element={<Protected onboarding={false}><Onboarding /></Protected>} /><Route path="/privacy" element={<Privacy />} /><Route path="/admin/login" element={<AdminPublic><AdminLogin /></AdminPublic>} /><Route path="/admin" element={<AdminProtected><AdminDashboard /></AdminProtected>} /><Route element={<Protected><AppShell /></Protected>}><Route path="/" element={<Dashboard />} /><Route path="/insights" element={<Insights />} /><Route path="/history" element={<History />} /><Route path="/settings" element={<Settings />} /></Route><Route path="*" element={<Navigate to="/" replace />} /></Routes></BrowserRouter></AdminAuthProvider></AuthProvider> }
+export default function App() { return <AuthProvider><AdminAuthProvider><BrowserRouter><Routes><Route path="/login" element={<Public><Login /></Public>} /><Route path="/register" element={<Public><Register /></Public>} /><Route path="/verify-email" element={<VerifyEmail />} /><Route path="/onboarding" element={<Protected onboarding={false}><Onboarding /></Protected>} /><Route path="/privacy" element={<Privacy />} /><Route path="/admin/login" element={<AdminPublic><AdminLogin /></AdminPublic>} /><Route path="/admin" element={<AdminProtected><AdminDashboard /></AdminProtected>} /><Route element={<Protected><AppShell /></Protected>}><Route path="/" element={<Dashboard />} /><Route path="/insights" element={<Insights />} /><Route path="/history" element={<History />} /><Route path="/settings" element={<Settings />} /></Route><Route path="*" element={<Navigate to="/" replace />} /></Routes></BrowserRouter></AdminAuthProvider></AuthProvider> }
