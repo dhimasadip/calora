@@ -3,6 +3,7 @@ import { and, asc, eq } from 'drizzle-orm'
 import { CoachMessageSchema, ExerciseEstimateRequestSchema, ExerciseEstimateSchema, FoodEstimateRequestSchema, FoodEstimateSchema } from '@calora/shared'
 import { db, agentMessages, exerciseEntries, foodEntries, userProfiles, users } from '../db/index.js'
 import { assertOpenAiConfigured, cacheEstimate, consumeAiInvocation, getAiUsage, getCachedEstimate, normalizedHash, openai, openAiEnv, recordAiUsage, refundAiInvocation } from '../lib/openai.js'
+import { SCOPE_CLASSIFY_SCHEMA, SCOPE_REFUSAL, parseScopeResponse } from '../lib/scope.js'
 import { generateId, toDateStr } from '../lib/utils.js'
 
 const FOOD_SCHEMA = {
@@ -58,6 +59,16 @@ async function estimate(userId: string, kind: 'food' | 'exercise', description: 
   }
 }
 
+async function classifyScope(content: string) {
+  const instruction = `Classify whether the user message below is in scope for a calorie and nutrition tracking app.\nIn scope: food, meals, recipes, calories, macros (protein/carbs/fat), nutrition, diet, hydration/water, workouts, exercise, steps, weight tracking, and weight goals.\nOut of scope: anything unrelated, such as coding, politics, trivia, entertainment, math homework, general knowledge, or medical diagnosis.\nRespond with ONLY a single valid JSON object (no markdown, no extra text) matching this JSON schema:\n${JSON.stringify(SCOPE_CLASSIFY_SCHEMA)}\n\nUser message:\n${content}`
+  const response = await openai.chat.completions.create({
+    model: openAiEnv.openaiModel,
+    messages: [{ role: 'user', content: instruction }],
+    response_format: { type: 'json_object' },
+  })
+  return { inScope: parseScopeResponse(response.choices[0]?.message?.content ?? ''), usage: response.usage }
+}
+
 async function coachContext(userId: string) {
   const today = toDateStr()
   const [user, profile, foods, exercises] = await Promise.all([
@@ -68,7 +79,7 @@ async function coachContext(userId: string) {
   ])
   const intake = foods.reduce((total, entry) => total + entry.calories, 0)
   const burned = exercises.reduce((total, entry) => total + entry.caloriesBurned, 0)
-  return `You are Calora's friendly nutrition coach. You cannot save, edit, or delete entries. Direct users to the Add food or Add workout actions for an editable estimate. Never give medical advice. Homemade food estimates are approximate. Keep replies concise and use clear formatting — short paragraphs, bullet points, and bold for key foods and numbers — so they're easy to scan.\nUser: ${user?.displayName ?? 'Calora member'}\nToday: ${today}; intake ${intake} kcal; burned ${burned} kcal; target ${profile?.dailyCalorieTarget ?? 2000} kcal.`
+  return `You are Calora's friendly nutrition coach. Answer ONLY questions about food, meals, calories, macros, nutrition, hydration, workouts, exercise, and weight goals. If asked about anything else — coding, politics, trivia, entertainment, general knowledge, medical conditions — politely decline and steer the conversation back to nutrition or fitness, even if the user insists or rephrases. You cannot save, edit, or delete entries. Direct users to the Add food or Add workout actions for an editable estimate. Never give medical advice. Homemade food estimates are approximate. Keep replies concise and use clear formatting — short paragraphs, bullet points, and bold for key foods and numbers — so they're easy to scan.\nUser: ${user?.displayName ?? 'Calora member'}\nToday: ${today}; intake ${intake} kcal; burned ${burned} kcal; target ${profile?.dailyCalorieTarget ?? 2000} kcal.`
 }
 
 export const aiRoutes: FastifyPluginAsync = async (fastify) => {
@@ -95,14 +106,28 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten().fieldErrors })
     let consumed = false
     try {
-      const usage = await consumeAiInvocation(request.userId)
-      if (!usage.allowed) return reply.status(429).send({ error: `Daily AI limit reached (${openAiEnv.aiDailyLimit}).` })
-      consumed = true
       assertOpenAiConfigured()
-      const [history, system] = await Promise.all([
+      const [history, system, scope] = await Promise.all([
         db.select().from(agentMessages).where(and(eq(agentMessages.userId, request.userId), eq(agentMessages.sessionId, parsed.data.sessionId))).orderBy(asc(agentMessages.createdAt)).limit(16),
         coachContext(request.userId),
+        classifyScope(parsed.data.content),
       ])
+      await recordAiUsage(request.userId, 'coach', openAiEnv.openaiModel, scope.usage)
+      if (!scope.inScope) {
+        const quota = await getAiUsage(request.userId)
+        await db.insert(agentMessages).values([
+          { id: generateId(), userId: request.userId, sessionId: parsed.data.sessionId, role: 'user', content: parsed.data.content },
+          { id: generateId(), userId: request.userId, sessionId: parsed.data.sessionId, role: 'assistant', content: SCOPE_REFUSAL },
+        ])
+        reply.raw.setHeader('Content-Type', 'text/event-stream'); reply.raw.setHeader('Cache-Control', 'no-cache'); reply.raw.setHeader('Connection', 'keep-alive'); reply.raw.flushHeaders()
+        reply.raw.write(`event: delta\ndata: ${JSON.stringify({ text: SCOPE_REFUSAL })}\n\n`)
+        reply.raw.write(`event: done\ndata: ${JSON.stringify({ limit: quota.limit, used: quota.used, remaining: quota.remaining })}\n\n`)
+        reply.raw.end()
+        return
+      }
+      const quota = await consumeAiInvocation(request.userId)
+      if (!quota.allowed) return reply.status(429).send({ error: `Daily AI limit reached (${openAiEnv.aiDailyLimit}).` })
+      consumed = true
       reply.raw.setHeader('Content-Type', 'text/event-stream'); reply.raw.setHeader('Cache-Control', 'no-cache'); reply.raw.setHeader('Connection', 'keep-alive'); reply.raw.flushHeaders()
       const stream = await openai.chat.completions.create({
         model: openAiEnv.openaiModel,
@@ -126,7 +151,7 @@ export const aiRoutes: FastifyPluginAsync = async (fastify) => {
         { id: generateId(), userId: request.userId, sessionId: parsed.data.sessionId, role: 'user', content: parsed.data.content },
         { id: generateId(), userId: request.userId, sessionId: parsed.data.sessionId, role: 'assistant', content: responseText },
       ])
-      reply.raw.write(`event: done\ndata: ${JSON.stringify({ limit: openAiEnv.aiDailyLimit, used: openAiEnv.aiDailyLimit - usage.remaining, remaining: usage.remaining })}\n\n`); reply.raw.end()
+      reply.raw.write(`event: done\ndata: ${JSON.stringify({ limit: openAiEnv.aiDailyLimit, used: openAiEnv.aiDailyLimit - quota.remaining, remaining: quota.remaining })}\n\n`); reply.raw.end()
     } catch (error) {
       if (consumed) await refundAiInvocation(request.userId)
       if (!reply.raw.headersSent) return reply.status((error as Error & { statusCode?: number }).statusCode ?? 502).send({ error: (error as Error).message || 'Unable to reach the coach' })
