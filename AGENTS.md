@@ -125,7 +125,11 @@ AI_PRICE_INPUT_CACHE_HIT_PER_M  # optional; USD per 1M cache-hit input tokens (d
 AI_PRICE_OUTPUT_PER_M # optional; USD per 1M output tokens (default 1.10)
 ADMIN_EMAIL           # optional; admin console login (AI cost dashboard at /admin)
 ADMIN_PASSWORD        # optional; admin console password (plaintext, timing-safe compare)
-SMTP_HOST             # optional, for password reset emails
+SMTP_HOST             # optional SMTP relay host (defaults to Gmail smtp.gmail.com:587)
+SMTP_PORT             # optional relay port (default 587; 465 implies implicit TLS)
+SMTP_USER             # Gmail address used to send verification emails (service: gmail)
+SMTP_PASS             # Gmail App Password (requires 2FA); never sent to browsers
+SMTP_FROM             # optional sender address for emails (defaults to SMTP_USER)
 APP_URL               # public URL of the app
 NODE_ENV              # development | production
 ```

@@ -30,6 +30,11 @@ services:
       AI_PRICE_INPUT_CACHE_HIT_PER_M: ${AI_PRICE_INPUT_CACHE_HIT_PER_M:-0.07}
       AI_PRICE_OUTPUT_PER_M: ${AI_PRICE_OUTPUT_PER_M:-1.10}
       APP_URL: ${APP_URL:-http://localhost}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
       NODE_ENV: production
       API_PORT: ${API_PORT:-3010}
       PRIVACY_CONTACT_EMAIL: ${PRIVACY_CONTACT_EMAIL:-privacy@calora.local}

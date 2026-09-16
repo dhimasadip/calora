@@ -1,4 +1,4 @@
-import type { AdminUsageSummary, AiUsage, ExerciseEstimate, ExerciseEntry, FoodEstimate, FoodEntry, ReminderPreferences, ReportSummary, UserProfile, WeightLog } from '@calora/shared'
+import type { AdminUsageSummary, AiUsage, ExerciseEstimate, ExerciseEntry, FoodEstimate, FoodEntry, ReminderPreferences, ReportSummary, User, UserProfile, WeightLog } from '@calora/shared'
 import { showErrorToast } from '@/components/ui/toast'
 
 const API_BASE = '/api/v1'
@@ -79,6 +79,8 @@ export const caloraApi = {
   saveWeight: (body: unknown) => api<{ log: WeightLog }>('/weight-logs', { method: 'POST', body }),
   reminders: () => api<{ preferences: ReminderPreferences }>('/settings/reminders'),
   saveReminders: (body: ReminderPreferences) => api<{ preferences: ReminderPreferences }>('/settings/reminders', { method: 'PUT', body }),
+  verifyEmail: (token: string) => api<{ user: User }>('/auth/verify-email', { method: 'POST', body: { token } }),
+  resendVerification: (email: string) => api<{ ok: boolean }>('/auth/resend-verification', { method: 'POST', body: { email } }),
 }
 
 export const adminApi = {

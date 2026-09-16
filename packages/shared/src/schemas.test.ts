@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CreateFoodEntrySchema, ExerciseEstimateSchema, FoodEstimateSchema, RegisterSchema, UpdateFoodEntrySchema } from './schemas/index.js'
+import { CreateFoodEntrySchema, ExerciseEstimateSchema, FoodEstimateSchema, RegisterSchema, ResendVerificationSchema, UpdateFoodEntrySchema, VerifyEmailSchema } from './schemas/index.js'
 
 describe('entry and AI contracts', () => {
   it('accepts complete food entries and rejects unsafe calorie values', () => {
@@ -17,5 +17,12 @@ describe('entry and AI contracts', () => {
     expect(RegisterSchema.safeParse({ email: 'user@example.com', displayName: 'User', password: 'Strong123' }).success).toBe(true)
     expect(RegisterSchema.safeParse({ email: 'user@example.com', displayName: 'User', password: 'lowercase123' }).success).toBe(false)
     expect(RegisterSchema.safeParse({ email: 'user@example.com', displayName: 'User', password: 'UPPERCASE123' }).success).toBe(false)
+  })
+
+  it('accepts verification tokens and valid resend emails', () => {
+    expect(VerifyEmailSchema.safeParse({ token: 'abc.def-ghi' }).success).toBe(true)
+    expect(VerifyEmailSchema.safeParse({ token: '' }).success).toBe(false)
+    expect(ResendVerificationSchema.safeParse({ email: 'user@example.com' }).success).toBe(true)
+    expect(ResendVerificationSchema.safeParse({ email: 'not-an-email' }).success).toBe(false)
   })
 })
